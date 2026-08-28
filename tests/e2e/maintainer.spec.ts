@@ -1,4 +1,7 @@
+import AxeBuilder from "@axe-core/playwright";
 import { test, expect } from "@playwright/test";
+
+import { filterBaselineViolations } from "./axe-baseline";
 import {
   interceptApi,
   mockContributorSession,
@@ -107,6 +110,34 @@ test.describe("Maintainer dashboard — access control", () => {
     await setupDashboard(page);
     await page.goto("/dashboard");
     await expect(page.getByRole("heading", { name: /maintainer dashboard/i })).toBeVisible();
+  });
+
+  // Issue #142 — axe-core accessibility gate.
+  //
+  // Runs on a fully signed-in maintainer /dashboard with every panel's data
+  // mocked (contributors, network config, Soroban events, stats): no real
+  // GitHub OAuth, Horizon, or database. `color-contrast` is excluded — it is
+  // already covered by the from-scratch WCAG luminance calculator in
+  // `src/lib/dark-mode-contrast-audit.test.ts`; see `tests/e2e/axe-baseline.ts`
+  // for the full rationale and the (currently empty beyond that) baseline.
+  test("the dashboard page has no axe violations beyond the baseline", async ({
+    page,
+  }) => {
+    await setupDashboard(page);
+    await page.goto("/dashboard");
+    await expect(
+      page.getByRole("heading", { name: /maintainer dashboard/i })
+    ).toBeVisible();
+    // Wait for the contributor table's async fetch to settle before scanning,
+    // so the gate reflects the steady-state page a maintainer sees.
+    await expect(page.getByText("@alice")).toBeVisible();
+
+    const results = await new AxeBuilder({ page })
+      .withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa"])
+      .analyze();
+
+    const violations = filterBaselineViolations(results.violations);
+    expect(violations, JSON.stringify(violations, null, 2)).toEqual([]);
   });
 });
 

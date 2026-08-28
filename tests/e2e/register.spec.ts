@@ -16,8 +16,10 @@
  * of issue #151 and will keep moving.
  */
 
+import AxeBuilder from "@axe-core/playwright";
 import { test, expect, type Page } from "@playwright/test";
 
+import { filterBaselineViolations } from "./axe-baseline";
 import { interceptApi, signInAsContributor } from "./helpers";
 
 // ── Fixtures ──────────────────────────────────────────────────────────────
@@ -180,6 +182,34 @@ test.describe("Register page — access", () => {
     await expect(
       page.getByTestId("register-page").getByText("@contributor", { exact: true })
     ).toBeVisible();
+  });
+
+  // Issue #142 — axe-core accessibility gate.
+  //
+  // Runs on a fully signed-in, fully mocked /register: no real GitHub OAuth,
+  // no real Horizon/Freighter calls. `color-contrast` is excluded here — it is
+  // already covered by the from-scratch WCAG luminance calculator in
+  // `src/lib/dark-mode-contrast-audit.test.ts`; see `tests/e2e/axe-baseline.ts`
+  // for the full rationale and the (currently empty beyond that) baseline.
+  test("the register page has no axe violations beyond the baseline", async ({
+    page,
+    context,
+  }) => {
+    await signInAsContributor(context, page);
+    await mockRegisterApis(page);
+
+    await page.goto("/register");
+    await expect(page.getByTestId("register-page")).toBeVisible();
+    // Let the async panels (network config, wallet stepper) settle before
+    // scanning, so the gate reflects the steady-state page a contributor sees.
+    await expect(page.getByTestId("trustline-guidance")).toBeVisible();
+
+    const results = await new AxeBuilder({ page })
+      .withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa"])
+      .analyze();
+
+    const violations = filterBaselineViolations(results.violations);
+    expect(violations, JSON.stringify(violations, null, 2)).toEqual([]);
   });
 
   test("the maintainer-only redirect explains itself", async ({
