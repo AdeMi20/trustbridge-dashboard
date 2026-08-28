@@ -68,8 +68,9 @@ export function Header() {
         : null;
     closeButtonRef.current?.focus();
 
+    const opener = menuButtonRef.current ?? openerRef.current;
     return () => {
-      (menuButtonRef.current ?? openerRef.current)?.focus();
+      opener?.focus();
     };
   }, [menuOpen]);
 

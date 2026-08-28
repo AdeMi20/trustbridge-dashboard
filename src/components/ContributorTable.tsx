@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useId, useMemo, useState } from "react";
+import React, { useEffect, useId, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import {
   ArrowUpDown,
@@ -285,6 +285,7 @@ export function ContributorTable({
 }: ContributorTableProps) {
   const columnPickerId = useId();
   const searchInputId = useId();
+  const paletteTitleId = useId();
   const [filter, setFilter] = useState<FilterOption>("all");
   const [sortKey, setSortKey] = useState<SortKey>("githubUsername");
   const [sortAsc, setSortAsc] = useState(true);
@@ -296,6 +297,10 @@ export function ContributorTable({
   // Which export the confirmation dialog is standing in front of, or null when
   // it is closed. Both formats share one dialog.
   const [pendingExport, setPendingExport] = useState<"csv" | "json" | null>(null);
+  const [paletteOpen, setPaletteOpen] = useState(false);
+  const searchInputRef = useRef<HTMLInputElement | null>(null);
+  const paletteRef = useRef<HTMLDivElement | null>(null);
+  const paletteOpenerRef = useRef<HTMLElement | null>(null);
 
   const staleSummary = useMemo(
     () => buildStalenessSummary(contributors),
@@ -307,6 +312,60 @@ export function ContributorTable({
     const bySearch = searchContributors(byFilter, search);
     return sortContributors(bySearch, sortKey, sortAsc);
   }, [contributors, filter, search, sortAsc, sortKey]);
+
+  useEffect(() => {
+    function handleShortcut(event: KeyboardEvent) {
+      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "k") {
+        event.preventDefault();
+        paletteOpenerRef.current = document.activeElement instanceof HTMLElement
+          ? document.activeElement
+          : null;
+        setPaletteOpen(true);
+      }
+    }
+
+    document.addEventListener("keydown", handleShortcut);
+    return () => document.removeEventListener("keydown", handleShortcut);
+  }, []);
+
+  useEffect(() => {
+    if (!paletteOpen) return;
+    const focusable = Array.from(
+      paletteRef.current?.querySelectorAll<HTMLElement>(
+        'button:not([disabled]), input:not([disabled])'
+      ) ?? []
+    );
+    focusable[0]?.focus();
+
+    const opener = paletteOpenerRef.current ?? searchInputRef.current;
+    return () => {
+      opener?.focus();
+    };
+  }, [paletteOpen]);
+
+  function handlePaletteKeyDown(event: React.KeyboardEvent<HTMLDivElement>) {
+    if (event.key === "Escape") {
+      event.preventDefault();
+      setPaletteOpen(false);
+      return;
+    }
+    if (event.key !== "Tab") return;
+    const focusable = Array.from(
+      paletteRef.current?.querySelectorAll<HTMLElement>(
+        'button:not([disabled]), input:not([disabled])'
+      ) ?? []
+    );
+    if (focusable.length === 0) return;
+    const first = focusable[0];
+    const last = focusable[focusable.length - 1];
+    if (event.shiftKey && document.activeElement === first) {
+      event.preventDefault();
+      last.focus();
+    } else if (!event.shiftKey && document.activeElement === last) {
+      event.preventDefault();
+      first.focus();
+    }
+  }
 
   function toggleSort(key: SortKey) {
     if (sortKey === key) {
@@ -398,6 +457,7 @@ export function ContributorTable({
           </label>
           <Search className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
           <Input
+            ref={searchInputRef}
             id={searchInputId}
             type="search"
             placeholder="Search by username or address"
@@ -490,6 +550,86 @@ export function ContributorTable({
             ))}
           </div>
         </fieldset>
+      )}
+
+      {paletteOpen && (
+        <div
+          className="fixed inset-0 z-50 flex items-start justify-center bg-background/60 px-4 pt-[15vh] backdrop-blur-sm"
+          role="presentation"
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget) setPaletteOpen(false);
+          }}
+        >
+          <div
+            ref={paletteRef}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby={paletteTitleId}
+            onKeyDown={handlePaletteKeyDown}
+            className="w-full max-w-lg rounded-xl border bg-card p-4 shadow-xl"
+          >
+            <div className="flex items-center justify-between gap-4">
+              <h2 id={paletteTitleId} className="font-semibold">Command palette</h2>
+              <kbd className="text-xs text-muted-foreground">Esc</kbd>
+            </div>
+            <div className="mt-3 grid gap-2">
+              <Input
+                aria-label="Command palette search"
+                placeholder="Search contributors"
+                value={search}
+                onChange={(event) => setSearch(event.target.value)}
+              />
+              <p className="pt-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                Filter readiness
+              </p>
+              {([
+                ["all", "All contributors"],
+                ["ready", "Ready"],
+                ["low_reserve", "Low reserve"],
+                ["needs_attention", "Needs attention"],
+              ] as const).map(([value, label]) => (
+                <Button
+                  key={value}
+                  type="button"
+                  variant={filter === value ? "stellar" : "outline"}
+                  className="justify-start"
+                  aria-pressed={filter === value}
+                  onClick={() => { setFilter(value); setPaletteOpen(false); }}
+                >
+                  {label}
+                </Button>
+              ))}
+              <Button
+                type="button"
+                variant="outline"
+                className="justify-start"
+                onClick={() => { setPaletteOpen(false); searchInputRef.current?.focus(); }}
+              >
+                Focus table search
+              </Button>
+              {onExport && (
+                <>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="justify-start"
+                    onClick={() => { setPaletteOpen(false); setPendingExport("csv"); }}
+                  >
+                    Export CSV
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="justify-start"
+                    onClick={() => { setPaletteOpen(false); setPendingExport("json"); }}
+                  >
+                    Export JSON
+                  </Button>
+                </>
+              )}
+            </div>
+          </div>
+        </div>
       )}
 
       {staleSummary.stale && (

@@ -1,5 +1,5 @@
 import React from "react";
-import { render, screen } from "@testing-library/react";
+import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -143,6 +143,37 @@ describe("ContributorTable", () => {
     expect(
       screen.getByRole("columnheader", { name: /GitHub/i })
     ).toHaveAttribute("aria-sort", "ascending");
+  });
+
+  it("opens the command palette and applies keyboard commands", async () => {
+    const user = userEvent.setup();
+    render(<ContributorTable contributors={contributors} onExport={vi.fn()} />);
+
+    await user.keyboard("{Control>}k{/Control}");
+    const palette = screen.getByRole("dialog", { name: /command palette/i });
+    expect(palette).toBeInTheDocument();
+
+    const readyButtonInPalette = within(palette).getByRole("button", { name: "Ready" });
+    await user.click(readyButtonInPalette);
+    expect(screen.getByRole("button", { name: /^Ready$/i })).toHaveAttribute(
+      "aria-pressed",
+      "true"
+    );
+
+    await user.keyboard("{Control>}k{/Control}");
+    await user.click(screen.getByRole("button", { name: /Focus table search/i }));
+    expect(screen.getByLabelText(/Search contributors by GitHub username/i)).toHaveFocus();
+  });
+
+  it("routes palette export through the existing confirmation dialog", async () => {
+    const user = userEvent.setup();
+    render(<ContributorTable contributors={contributors} onExport={vi.fn()} />);
+
+    await user.keyboard("{Control>}k{/Control}");
+    await user.click(screen.getByRole("button", { name: "Export CSV" }));
+
+    expect(screen.getByRole("alertdialog")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Download CSV/i })).toBeInTheDocument();
   });
 
   it("exports derived proof and horizon debug details", () => {
