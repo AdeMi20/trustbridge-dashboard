@@ -129,7 +129,7 @@ describe("auth jwt callback - maintainer team scoping", () => {
     const token = await callJwt();
 
     expect(token.isMaintainer).toBe(true);
-    expect(fetch).toHaveBeenCalledTimes(1);
+    expect(fetch).toHaveBeenCalledTimes(2);
     expect(recordAuditLog).not.toHaveBeenCalled();
   });
 

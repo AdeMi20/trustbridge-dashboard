@@ -18,6 +18,11 @@ vi.mock("@/lib/audit", () => ({
   getRecentAuditLog: vi.fn(),
 }));
 vi.mock("@/lib/audit-format", () => ({ summarizeAuditLog: vi.fn(() => ({})) }));
+vi.mock("@/lib/background-queue", () => ({
+  backgroundQueue: {
+    enqueue: vi.fn(),
+  },
+}));
 
 import { getServerSession } from "next-auth";
 import {
@@ -26,6 +31,7 @@ import {
   refreshContributor,
 } from "@/lib/registrations";
 import { getRecentAuditLog } from "@/lib/audit";
+import { backgroundQueue } from "@/lib/background-queue";
 
 import { GET as getContributorsRoute, POST as postContributorsRoute } from "@/app/api/contributors/route";
 import { POST as recheckSingle } from "@/app/api/contributors/[id]/route";
@@ -191,18 +197,9 @@ describe("POST /api/contributors — batch recheck", () => {
     expect(refreshAllContributors).not.toHaveBeenCalled();
   });
 
-  it("runs batch recheck and returns count + contributors for maintainer", async () => {
+  it("enqueues batch recheck and returns job metadata for maintainer", async () => {
     mockMaintainer();
-    vi.mocked(refreshAllContributors).mockResolvedValue({
-      refreshed: 4,
-      changed: 0,
-      diffs: [],
-      errors: [],
-    });
-    vi.mocked(getContributors).mockResolvedValue({
-      contributors: [makeContributor("1")],
-      total: 1,
-    });
+    vi.mocked(backgroundQueue.enqueue).mockResolvedValue("job-batch-2");
     const req = new NextRequest("http://localhost:3000/api/contributors", {
       method: "POST",
       headers: SAME_ORIGIN,
@@ -210,8 +207,15 @@ describe("POST /api/contributors — batch recheck", () => {
     const res = await postContributorsRoute(req);
     expect(res.status).toBe(200);
     const json = await res.json();
-    expect(json.refreshed).toBe(4);
-    expect(Array.isArray(json.contributors)).toBe(true);
+    expect(json.jobId).toBe("job-batch-2");
+    expect(json.status).toBe("pending");
+    expect(json.message).toMatch(/enqueued/i);
+    expect(backgroundQueue.enqueue).toHaveBeenCalledWith(
+      "recheck.batch",
+      {},
+      "m-1"
+    );
+    expect(refreshAllContributors).not.toHaveBeenCalled();
   });
 });
 

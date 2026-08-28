@@ -144,7 +144,9 @@ export async function GET(): Promise<NextResponse<HealthResponse>> {
       contractSync: {
         status: contractSyncStatus,
         lastRunAt: lastSync?.startedAt ?? null,
-        ...(lastSync?.error ? { lastError: lastSync.error } : {}),
+        ...(lastSync?.errors?.length
+          ? { lastError: lastSync.errors.join("; ") }
+          : {}),
       },
     },
     version,

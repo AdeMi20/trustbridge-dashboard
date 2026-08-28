@@ -177,3 +177,6 @@ export interface NetworkConfig {
   actionAlignment: ActionAlignment;
   warnings: string[];
 }
+
+/** Maintainer RBAC role (see next-auth session.user.role). */
+export type AppRole = "admin" | "operator" | "viewer";

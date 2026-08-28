@@ -26,16 +26,12 @@ import {
   flattenContributorPages,
   useInfiniteContributors,
 } from "@/lib/use-infinite-contributors";
+import { useJobProgress } from "@/lib/use-job-progress";
 import type {
   ContributorRow,
   NetworkConfig,
   SorobanEventTimelineResponse,
 } from "@/types";
-
-interface RecheckResponse {
-  contributors: ContributorRow[];
-  refreshed: number;
-}
 
 interface BatchRecheckResponse {
   jobId: string;
@@ -52,14 +48,10 @@ export default function DashboardPage() {
     mutationFn: async () => {
       const response = await fetch("/api/contributors", { method: "POST" });
       if (!response.ok) throw new Error("Re-check failed");
-      return (await response.json()) as RecheckResponse | BatchRecheckResponse;
+      return (await response.json()) as BatchRecheckResponse;
     },
     onSuccess: (data) => {
-      // A batch re-check answers with a job id and streams progress over SSE;
-      // a synchronous one answers with the refreshed rows.
-      if ("jobId" in data && data.jobId) {
-        startProgress(data.jobId);
-      }
+      startProgress(data.jobId);
       void queryClient.invalidateQueries({ queryKey: ["contributors"] });
     },
   });
@@ -276,7 +268,10 @@ export default function DashboardPage() {
       ) : (
         <ContributorTable
           contributors={contributors}
-          onExport={() => exportContributorsCsv(contributors)}
+          // `force`: ContributorTable has already shown the accessible export
+          // confirmation, staleness warning included. Leaving this unforced
+          // stacks a second, native `window.confirm()` on top of it.
+          onExport={() => exportContributorsCsv(contributors, true)}
           onRecheck={(id) => recheckOneMutation.mutate(id)}
           onLoadMore={() => void contributorsQuery.fetchNextPage()}
           hasMore={Boolean(contributorsQuery.hasNextPage)}

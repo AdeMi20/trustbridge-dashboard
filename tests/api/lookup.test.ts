@@ -14,9 +14,17 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import { NextRequest } from "next/server";
 
-// Mock dependencies
+// Mock dependencies — keep real cache key/header helpers, stub only getOrCompute
 vi.mock("@/lib/horizon");
-vi.mock("@/lib/cache");
+vi.mock("@/lib/cache", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/lib/cache")>();
+  return {
+    ...actual,
+    verificationCache: Object.assign(actual.verificationCache, {
+      getOrCompute: vi.fn(),
+    }),
+  };
+});
 vi.mock("@/lib/action-lookup");
 
 import { GET } from "@/app/api/actions/lookup/route";
@@ -25,7 +33,8 @@ import * as cacheLib from "@/lib/cache";
 import * as actionLookupLib from "@/lib/action-lookup";
 
 describe("GET /api/actions/lookup", () => {
-  const VALID_ADDRESS = "GADDRALICE12345678901234567890123456789012345678901234";
+  const VALID_ADDRESS = "GDXNXL25GDM3N5LAR5FALA3VSGHFET3EOKLXRP3ITPPMR3PISTQSKSFS";
+  const VALID_ADDRESS_2 = "GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVN";
   const INVALID_ADDRESS = "NOTAVALIDADDRESS";
   const DEFAULT_ASSET_CODE = "USDC";
   const DEFAULT_ASSET_ISSUER = "GBBD47XCVX2FTHVG7245YFSSSFYQ2Y5RJRQ3QH6POIRXZVSFD3ZCVTEJ";
@@ -132,7 +141,7 @@ describe("GET /api/actions/lookup", () => {
       cacheGetOrComputeSpy.mockResolvedValue(mockResult);
 
       const address1 = VALID_ADDRESS;
-      const address2 = "GUSER2ADDR12345678901234567890123456789012345678901234567";
+      const address2 = VALID_ADDRESS_2;
 
       const request1 = new NextRequest(
         `http://localhost:3000/api/actions/lookup?address=${address1}`

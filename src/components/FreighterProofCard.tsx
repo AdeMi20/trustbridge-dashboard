@@ -34,6 +34,7 @@ export function FreighterProofCard({
 }: FreighterProofCardProps) {
   const [freighterDetected, setFreighterDetected] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [copyFailed, setCopyFailed] = useState(false);
   const [signed, setSigned] = useState(false);
   const [signing, setSigning] = useState(false);
   const [signError, setSignError] = useState(false);
@@ -46,9 +47,16 @@ export function FreighterProofCard({
   }, []);
 
   async function copyChallenge() {
-    await navigator.clipboard.writeText(proof.challenge);
-    setCopied(true);
-    window.setTimeout(() => setCopied(false), 1500);
+    try {
+      await navigator.clipboard.writeText(proof.challenge);
+      setCopyFailed(false);
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 1500);
+    } catch {
+      // No Clipboard API (insecure origin, permission denied). The challenge is
+      // on screen and selectable, so say so rather than failing silently.
+      setCopyFailed(true);
+    }
   }
 
   async function signChallenge() {
@@ -69,7 +77,10 @@ export function FreighterProofCard({
   }
 
   return (
-    <Card className={cn("border-stellar-purple/20", className)}>
+    <Card
+      className={cn("border-stellar-purple/20", className)}
+      data-testid="freighter-proof-card"
+    >
       <CardHeader>
         <CardTitle className="flex items-center gap-2 text-lg">
           {freighterDetected ? (
@@ -93,6 +104,7 @@ export function FreighterProofCard({
               : "border-amber-500/30 bg-amber-500/5 text-amber-700 dark:text-amber-300"
           )}
           role="status"
+          data-testid="freighter-detection-status"
         >
           {freighterDetected
             ? "Freighter detected in this browser. You can use it to sign the ownership challenge."
@@ -110,6 +122,7 @@ export function FreighterProofCard({
           <pre
             className="overflow-x-auto rounded-md border bg-muted/40 p-3 text-xs whitespace-pre-wrap"
             aria-label="Freighter ownership proof challenge"
+            data-testid="freighter-challenge"
           >
             {proof.challenge}
           </pre>
@@ -122,18 +135,38 @@ export function FreighterProofCard({
           onClick={() => void copyChallenge()}
           disabled={!addressReady}
           aria-disabled={!addressReady}
+          data-testid="copy-challenge"
         >
           <Copy className="h-4 w-4" />
           {copied ? "Copied challenge" : "Copy challenge"}
         </Button>
         {freighterDetected && (
-          <Button variant="stellar" onClick={() => void signChallenge()} disabled={!addressReady || signing}>
+          <Button
+            variant="stellar"
+            onClick={() => void signChallenge()}
+            disabled={!addressReady || signing}
+            data-testid="sign-challenge"
+          >
             <PenLine className="h-4 w-4" />
             {signed ? "Challenge signed" : signing ? "Signing..." : "Sign challenge"}
           </Button>
         )}
+        {copyFailed && (
+          <p
+            className="text-xs text-destructive"
+            role="alert"
+            data-testid="freighter-copy-error"
+          >
+            Could not reach the clipboard. Select the challenge text above and
+            copy it manually.
+          </p>
+        )}
         {signError && (
-          <p className="text-xs text-destructive" role="alert">
+          <p
+            className="text-xs text-destructive"
+            role="alert"
+            data-testid="freighter-sign-error"
+          >
             Freighter did not sign the challenge. You can still copy it for a fallback review.
           </p>
         )}

@@ -1,21 +1,20 @@
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it } from "vitest";
 import { render, screen } from "@testing-library/react";
 import { VerifiedBadge } from "@/components/VerifiedBadge";
 
 describe("VerifiedBadge", () => {
   describe("Verified state", () => {
     it("renders verified badge when verified=true", () => {
-      render(<VerifiedBadge verified={true} />);
+      const { container } = render(<VerifiedBadge verified={true} />);
 
-      const badge = screen.getByText("Verified");
-      expect(badge).toBeInTheDocument();
-      expect(badge.className).toContain("ready");
+      expect(screen.getByText("Verified")).toBeInTheDocument();
+      expect(container.firstChild?.className).toContain("emerald");
     });
 
     it("shows correct title for verified state", () => {
       const { container } = render(<VerifiedBadge verified={true} />);
 
-      const badge = container.querySelector('[title]');
+      const badge = container.querySelector("[title]");
       expect(badge?.getAttribute("title")).toContain(
         "On-chain verified: funded with an authorized trustline"
       );
@@ -24,7 +23,6 @@ describe("VerifiedBadge", () => {
     it("renders BadgeCheck icon when verified", () => {
       const { container } = render(<VerifiedBadge verified={true} />);
 
-      // Check for SVG or icon element
       const icon = container.querySelector("svg");
       expect(icon).toBeInTheDocument();
     });
@@ -41,7 +39,7 @@ describe("VerifiedBadge", () => {
     it("shows correct title for unverified state", () => {
       const { container } = render(<VerifiedBadge verified={false} />);
 
-      const badge = container.querySelector('[title]');
+      const badge = container.querySelector("[title]");
       expect(badge?.getAttribute("title")).toContain("Not yet verified on-chain");
     });
 
@@ -82,7 +80,7 @@ describe("VerifiedBadge", () => {
       const { container } = render(<VerifiedBadge verified={true} />);
 
       const icon = container.querySelector("svg");
-      expect(icon?.parentElement?.getAttribute("aria-hidden")).toBe("true");
+      expect(icon?.getAttribute("aria-hidden")).toBe("true");
     });
   });
 
@@ -93,7 +91,6 @@ describe("VerifiedBadge", () => {
       const badge = container.firstChild;
       const children = Array.from(badge?.childNodes || []);
 
-      // Icon should come before text
       expect(children.length).toBeGreaterThan(1);
     });
 
@@ -101,8 +98,8 @@ describe("VerifiedBadge", () => {
       const { container } = render(<VerifiedBadge verified={true} />);
 
       const icon = container.querySelector("svg");
-      expect(icon?.className).toContain("h-3.5");
-      expect(icon?.className).toContain("w-3.5");
+      expect(icon?.classList.contains("h-3.5")).toBe(true);
+      expect(icon?.classList.contains("w-3.5")).toBe(true);
     });
   });
 
@@ -117,8 +114,8 @@ describe("VerifiedBadge", () => {
     it("has decorative aria-hidden on icon", () => {
       const { container } = render(<VerifiedBadge verified={true} />);
 
-      const iconParent = container.querySelector("[aria-hidden='true']");
-      expect(iconParent).toBeInTheDocument();
+      const icon = container.querySelector("[aria-hidden='true']");
+      expect(icon).toBeInTheDocument();
     });
   });
 });

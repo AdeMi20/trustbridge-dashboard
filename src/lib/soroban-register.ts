@@ -1,7 +1,7 @@
 import "server-only";
 
 import type { Registration } from "@prisma/client";
-import { rpc, Keypair, TransactionBuilder, Networks, Contract, Address } from "stellar-sdk";
+import { rpc, Keypair, TransactionBuilder, Networks, Contract, Address, nativeToScVal } from "stellar-sdk";
 
 /**
  * Result of attempting to mirror a registration to a Soroban contract.
@@ -20,7 +20,7 @@ export interface SorobanRegistrationResult {
 function buildRegisterArgs(stellarAddress: string, githubUsername: string) {
   return [
     new Address(stellarAddress).toScVal(),
-    Buffer.from(githubUsername).toScVal(),
+    nativeToScVal(Buffer.from(githubUsername), { type: "bytes" }),
   ];
 }
 
@@ -96,8 +96,9 @@ export async function mirrorRegistrationToSoroban(
     }
 
     if (response.status === "ERROR") {
-      const errorResult = response.errorResult as any;
-      const errorCodes = errorResult?.result?.codes;
+      const errorResult = response.errorResult as
+        | { result?: { codes?: unknown; name?: string } }
+        | undefined;
       const errorType = errorResult?.result?.name;
 
       // Handle specific error cases

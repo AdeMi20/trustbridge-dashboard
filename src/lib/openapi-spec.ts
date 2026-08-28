@@ -225,6 +225,34 @@ export function generateOpenAPISpec(
           },
         },
       },
+      "/api/webhooks/trustbridge-action": {
+        post: {
+          operationId: "trustbridgeActionWebhook",
+          summary: "Receive trustbridge-action validation webhook",
+          tags: ["Webhooks"],
+          requestBody: {
+            required: true,
+            content: {
+              "application/json": {
+                schema: {
+                  $ref: "#/components/schemas/WebhookPayload",
+                },
+              },
+            },
+          },
+          responses: {
+            "202": {
+              description: "Webhook accepted for processing",
+            },
+            "400": {
+              description: "Unsupported schema version or event type",
+            },
+            "401": {
+              description: "Invalid signature or unauthorized request",
+            },
+          },
+        },
+      },
     },
     components: {
       schemas: {
@@ -293,6 +321,53 @@ export function generateOpenAPISpec(
             total: { type: "integer" },
             ready: { type: "integer" },
             lowReserve: { type: "integer" },
+          },
+        },
+        WebhookPayload: {
+          type: "object",
+          required: [
+            "schema_version",
+            "event",
+            "timestamp",
+            "repository",
+            "issue_number",
+            "stellar_address",
+            "result",
+          ],
+          properties: {
+            schema_version: { type: "string", example: "1" },
+            event: { type: "string", example: "validation_complete" },
+            timestamp: { type: "string", format: "date-time" },
+            repository: { type: "string", example: "owner/repo" },
+            issue_number: { type: "integer", nullable: true },
+            stellar_address: { type: "string", example: "GBX7...4Y5Z" },
+            result: {
+              type: "object",
+              required: [
+                "valid",
+                "account_funded",
+                "trustline_exists",
+                "xlm_balance",
+                "checks",
+              ],
+              properties: {
+                valid: { type: "boolean" },
+                account_funded: { type: "boolean" },
+                trustline_exists: { type: "boolean" },
+                xlm_balance: { type: "string" },
+                checks: {
+                  type: "array",
+                  items: {
+                    type: "object",
+                    required: ["label", "passed"],
+                    properties: {
+                      label: { type: "string" },
+                      passed: { type: "boolean" },
+                    },
+                  },
+                },
+              },
+            },
           },
         },
       },

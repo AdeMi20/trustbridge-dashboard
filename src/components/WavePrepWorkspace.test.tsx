@@ -93,7 +93,7 @@ describe("WavePrepWorkspace", () => {
     ).toBeInTheDocument();
   });
 
-  it("should call onExportCsv when export CSV is clicked", () => {
+  it("should call onExportCsv only after the confirmation is accepted", () => {
     const onExportCsv = vi.fn();
     render(
       <WavePrepWorkspace
@@ -102,15 +102,17 @@ describe("WavePrepWorkspace", () => {
       />
     );
 
-    const csvButton = screen.getByRole("button", {
-      name: /Export CSV/i,
-    });
+    fireEvent.click(screen.getByRole("button", { name: /Export CSV/i }));
 
-    fireEvent.click(csvButton);
-    expect(onExportCsv).toHaveBeenCalled();
+    // The click opens the confirmation; nothing has downloaded yet.
+    expect(onExportCsv).not.toHaveBeenCalled();
+    expect(screen.getByRole("alertdialog")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: /Download CSV/i }));
+    expect(onExportCsv).toHaveBeenCalledTimes(1);
   });
 
-  it("should call onExportJson when export JSON is clicked", () => {
+  it("should call onExportJson only after the confirmation is accepted", () => {
     const onExportJson = vi.fn();
     render(
       <WavePrepWorkspace
@@ -119,12 +121,38 @@ describe("WavePrepWorkspace", () => {
       />
     );
 
-    const jsonButton = screen.getByRole("button", {
-      name: /Export JSON/i,
-    });
+    fireEvent.click(screen.getByRole("button", { name: /Export JSON/i }));
 
-    fireEvent.click(jsonButton);
-    expect(onExportJson).toHaveBeenCalled();
+    expect(onExportJson).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("button", { name: /Download JSON/i }));
+    expect(onExportJson).toHaveBeenCalledTimes(1);
+  });
+
+  it("should not export when the confirmation is cancelled", () => {
+    const onExportCsv = vi.fn();
+    render(
+      <WavePrepWorkspace
+        contributors={mockContributors}
+        onExportCsv={onExportCsv}
+      />
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: /Export CSV/i }));
+    fireEvent.click(screen.getByRole("button", { name: /^Cancel$/i }));
+
+    expect(onExportCsv).not.toHaveBeenCalled();
+    expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument();
+  });
+
+  it("warns in the dialog when the selected rows are stale", () => {
+    // `charlie` has never been checked, so the selection is stale.
+    render(<WavePrepWorkspace contributors={mockContributors} onExportCsv={vi.fn()} />);
+
+    fireEvent.click(screen.getByRole("button", { name: /Export CSV/i }));
+
+    const dialog = screen.getByRole("alertdialog");
+    expect(dialog).toHaveTextContent(/have not been verified/i);
+    expect(dialog).toHaveTextContent(/personal data/i);
   });
 
   it("should disable export buttons when isExporting is true", () => {

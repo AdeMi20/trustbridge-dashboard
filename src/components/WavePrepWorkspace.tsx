@@ -11,6 +11,8 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
+import { buildStalenessSummary } from "@/lib/stale-export";
 import type { ContributorRow, ReadinessStatus } from "@/types";
 
 interface WavePrepWorkspaceProps {
@@ -31,6 +33,8 @@ export function WavePrepWorkspace({
   const [selectedStatuses, setSelectedStatuses] = useState<
     Set<ReadinessStatus>
   >(new Set<ReadinessStatus>(["ready", "low_reserve", "not_ready"]));
+  // Which export the confirmation is standing in front of, or null when closed.
+  const [pendingExport, setPendingExport] = useState<"csv" | "json" | null>(null);
 
   const stats = useMemo(() => {
     return {
@@ -48,6 +52,12 @@ export function WavePrepWorkspace({
   const filteredContributors = useMemo(() => {
     return contributors.filter((c) => selectedStatuses.has(c.readiness));
   }, [contributors, selectedStatuses]);
+
+  // Warn on the rows actually going into the file, not on the whole table.
+  const staleSummary = useMemo(
+    () => buildStalenessSummary(filteredContributors),
+    [filteredContributors]
+  );
 
   const toggleStatus = (status: ReadinessStatus) => {
     const newStatuses = new Set(selectedStatuses);
@@ -166,7 +176,7 @@ export function WavePrepWorkspace({
               <Button
                 variant="secondary"
                 size="sm"
-                onClick={onExportCsv}
+                onClick={() => setPendingExport("csv")}
                 disabled={isExporting || contributors.length === 0}
               >
                 Export CSV ({filteredContributors.length})
@@ -174,7 +184,7 @@ export function WavePrepWorkspace({
               <Button
                 variant="secondary"
                 size="sm"
-                onClick={onExportJson}
+                onClick={() => setPendingExport("json")}
                 disabled={isExporting || contributors.length === 0}
               >
                 Export JSON ({filteredContributors.length})
@@ -190,6 +200,48 @@ export function WavePrepWorkspace({
           </div>
         </CardContent>
       </Card>
+
+      {/*
+        Both handlers hit the maintainer-only export API routes, which do their
+        own authorization — this dialog is the human check in front of a file
+        full of PII, not a substitute for that check.
+      */}
+      <ConfirmDialog
+        open={pendingExport !== null}
+        title={
+          pendingExport === "json"
+            ? "Export this Wave selection as JSON?"
+            : "Export this Wave selection as CSV?"
+        }
+        description={
+          <>
+            This downloads{" "}
+            <strong className="text-foreground">
+              {filteredContributors.length} of {contributors.length} contributor
+              {contributors.length === 1 ? "" : "s"}
+            </strong>{" "}
+            to your device, including GitHub handles, Stellar addresses and
+            balances. Handle the file as personal data.
+          </>
+        }
+        warning={staleSummary.stale ? staleSummary.warning : undefined}
+        confirmLabel={
+          pendingExport === "json" ? "Download JSON" : "Download CSV"
+        }
+        cancelLabel="Cancel"
+        destructive={staleSummary.stale}
+        pending={isExporting}
+        onCancel={() => setPendingExport(null)}
+        onConfirm={() => {
+          const format = pendingExport;
+          setPendingExport(null);
+          if (format === "json") {
+            onExportJson?.();
+          } else {
+            onExportCsv?.();
+          }
+        }}
+      />
     </div>
   );
 }

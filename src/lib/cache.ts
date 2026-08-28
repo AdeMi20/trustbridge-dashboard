@@ -34,6 +34,7 @@ export class CacheStore<T> {
     if (Date.now() > entry.expiresAt) {
       this.store.delete(key);
       this.stats.evictions++;
+      this.stats.misses++;
       return null;
     }
 

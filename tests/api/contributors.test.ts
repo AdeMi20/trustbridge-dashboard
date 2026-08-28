@@ -16,10 +16,17 @@ vi.mock("@/lib/audit", () => ({
   recordAuditLog: vi.fn(),
 }));
 
+vi.mock("@/lib/background-queue", () => ({
+  backgroundQueue: {
+    enqueue: vi.fn(),
+  },
+}));
+
 import {
   refreshMaintainerSession,
   requireMaintainerSession,
 } from "@/lib/api-auth";
+import { backgroundQueue } from "@/lib/background-queue";
 import { getContributors, refreshAllContributors } from "@/lib/registrations";
 import type { ContributorRow } from "@/types";
 
@@ -252,23 +259,20 @@ describe("POST /api/contributors", () => {
     vi.mocked(requireMaintainerSession).mockResolvedValue({
       user: { id: "user-1", isMaintainer: true },
     } as any);
-    vi.mocked(refreshAllContributors).mockResolvedValue({
-      refreshed: 3,
-      changed: 0,
-      diffs: [],
-      errors: [],
-    });
-    vi.mocked(getContributors).mockResolvedValue({
-      contributors: allContributors,
-      total: allContributors.length,
-    });
+    vi.mocked(backgroundQueue.enqueue).mockResolvedValue("job-batch-1");
 
     const r = post();
     const res = await POST(r);
     expect(res.status).toBe(200);
     const json = await res.json();
-    expect(json.refreshed).toBe(3);
-    expect(json.contributors).toHaveLength(5);
-    expect(json.registryMode).toBe("live");
+    expect(json.jobId).toBe("job-batch-1");
+    expect(json.status).toBe("pending");
+    expect(json.message).toMatch(/enqueued/i);
+    expect(backgroundQueue.enqueue).toHaveBeenCalledWith(
+      "recheck.batch",
+      {},
+      "user-1"
+    );
+    expect(refreshAllContributors).not.toHaveBeenCalled();
   });
 });

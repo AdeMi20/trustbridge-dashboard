@@ -12,17 +12,15 @@
  */
 
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
-import { render, screen, waitFor } from "@testing-library/react";
+import { act, render, screen } from "@testing-library/react";
 import { SlaCountdown } from "@/components/SlaCountdown";
 
 describe("SlaCountdown", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    vi.useFakeTimers();
   });
 
   afterEach(() => {
-    vi.runOnlyPendingTimers();
     vi.useRealTimers();
   });
 
@@ -37,7 +35,7 @@ describe("SlaCountdown", () => {
         />
       );
 
-      expect(screen.queryByText(/clock|time|checked/i)).toBeTruthy();
+      expect(screen.getByText(/\d+h \d+m/)).toBeInTheDocument();
     });
 
     it("shows 'Never checked' when lastCheckedAt is null", () => {
@@ -81,48 +79,43 @@ describe("SlaCountdown", () => {
   });
 
   describe("time display", () => {
-    it("displays time remaining in HhHmmM format", async () => {
+    it("displays time remaining in HhHmmM format", () => {
       const now = new Date();
-      const hoursInFuture = new Date(now.getTime() + 5 * 60 * 60 * 1000); // 5 hours from now
+      render(
+        <SlaCountdown
+          readiness="low_reserve"
+          lastCheckedAt={now}
+          slaHours={24}
+        />
+      );
+
+      expect(screen.getByText(/\d+h \d+m/)).toBeInTheDocument();
+    });
+
+    it("updates time display every minute", () => {
+      vi.useFakeTimers();
+      const now = new Date("2026-01-01T12:00:00Z");
+      vi.setSystemTime(now);
+      const lastCheckedAt = new Date(now.getTime() - 60 * 1000);
 
       render(
         <SlaCountdown
           readiness="low_reserve"
-          lastCheckedAt={hoursInFuture}
+          lastCheckedAt={lastCheckedAt}
           slaHours={24}
         />
       );
 
-      await waitFor(() => {
-        // Should show approximately 29 hours (24 + 5)
-        expect(screen.getByText(/\d+h \d+m/)).toBeInTheDocument();
+      expect(screen.getByText("23h 59m")).toBeInTheDocument();
+
+      act(() => {
+        vi.advanceTimersByTime(60_000);
       });
+      expect(screen.getByText("23h 58m")).toBeInTheDocument();
     });
 
-    it("updates time display every minute", async () => {
-      const now = new Date();
-      const futureTime = new Date(now.getTime() + 2 * 60 * 60 * 1000);
-
-      const { rerender } = render(
-        <SlaCountdown
-          readiness="low_reserve"
-          lastCheckedAt={futureTime}
-          slaHours={24}
-        />
-      );
-
-      // Advance time by 1 minute
-      vi.advanceTimersByTime(60_000);
-
-      // Should have updated display
-      await waitFor(() => {
-        expect(vi.getTimerCount()).toBeGreaterThan(0);
-      });
-    });
-
-    it("shows 'SLA expired' when deadline has passed", async () => {
-      const now = new Date();
-      const pastTime = new Date(now.getTime() - 1 * 60 * 60 * 1000); // 1 hour ago
+    it("shows 'SLA expired' when deadline has passed", () => {
+      const pastTime = new Date(Date.now() - 25 * 60 * 60 * 1000);
 
       render(
         <SlaCountdown
@@ -132,27 +125,22 @@ describe("SlaCountdown", () => {
         />
       );
 
-      await waitFor(() => {
-        expect(screen.getByText(/sla expired/i)).toBeInTheDocument();
-      });
+      expect(screen.getByText(/sla expired/i)).toBeInTheDocument();
     });
 
-    it("marks as urgent when less than 6 hours remain", async () => {
-      const now = new Date();
-      const futureTime = new Date(now.getTime() + 5 * 60 * 60 * 1000); // 5 hours from now
+    it("marks as urgent when less than 6 hours remain", () => {
+      const lastCheckedAt = new Date(Date.now() - 20 * 60 * 60 * 1000);
 
       const { container } = render(
         <SlaCountdown
           readiness="low_reserve"
-          lastCheckedAt={futureTime}
+          lastCheckedAt={lastCheckedAt}
           slaHours={24}
         />
       );
 
-      await waitFor(() => {
-        const element = container.querySelector("[class*='text-amber']");
-        expect(element).toBeTruthy(); // Should have amber/warning color
-      });
+      const element = container.querySelector("[class*='text-amber']");
+      expect(element).toBeTruthy();
     });
   });
 
@@ -237,7 +225,7 @@ describe("SlaCountdown", () => {
       consoleSpy.mockRestore();
     });
 
-    it("handles initial 'Unknown' state during hydration", async () => {
+    it("handles initial 'Unknown' state during hydration", () => {
       const now = new Date();
       const { container } = render(
         <SlaCountdown
@@ -247,35 +235,23 @@ describe("SlaCountdown", () => {
         />
       );
 
-      // Component should mount without errors
-      expect(container).toBeTruthy();
-
-      // After hydration, should show actual value
-      await waitFor(() => {
-        const text = container.textContent;
-        expect(text).not.toBeEmpty();
-      });
+      expect(container.textContent?.length ?? 0).toBeGreaterThan(0);
     });
   });
 
   describe("timezone handling", () => {
-    it("correctly calculates deadline in local timezone", async () => {
-      const now = new Date();
-      const hourFromNow = new Date(now.getTime() + 1 * 60 * 60 * 1000);
+    it("correctly calculates deadline in local timezone", () => {
+      const lastCheckedAt = new Date(Date.now() - 60 * 60 * 1000);
 
       render(
         <SlaCountdown
           readiness="low_reserve"
-          lastCheckedAt={hourFromNow}
+          lastCheckedAt={lastCheckedAt}
           slaHours={24}
         />
       );
 
-      await waitFor(() => {
-        // Should show approximately 25 hours (24 + 1)
-        const text = screen.getByText(/\d+h \d+m/);
-        expect(text).toBeInTheDocument();
-      });
+      expect(screen.getByText(/\d+h \d+m/)).toBeInTheDocument();
     });
 
     it("handles DST transitions without breaking", async () => {
@@ -305,46 +281,37 @@ describe("SlaCountdown", () => {
   });
 
   describe("configuration", () => {
-    it("respects custom slaHours prop", async () => {
+    it("respects custom slaHours prop", () => {
       const now = new Date();
-      const futureTime = new Date(now.getTime() + 10 * 60 * 60 * 1000);
 
       render(
         <SlaCountdown
           readiness="low_reserve"
-          lastCheckedAt={futureTime}
-          slaHours={12} // Custom SLA: 12 hours
+          lastCheckedAt={now}
+          slaHours={12}
         />
       );
 
-      await waitFor(() => {
-        // Should show approximately 22 hours (12 + 10)
-        const text = screen.getByText(/\d+h \d+m/);
-        expect(text).toBeInTheDocument();
-      });
+      expect(screen.getByText(/\d+h \d+m/)).toBeInTheDocument();
     });
 
-    it("uses default 24-hour SLA when slaHours not provided", async () => {
+    it("uses default 24-hour SLA when slaHours not provided", () => {
       const now = new Date();
-      const futureTime = new Date(now.getTime() + 5 * 60 * 60 * 1000);
 
       render(
         <SlaCountdown
           readiness="low_reserve"
-          lastCheckedAt={futureTime}
+          lastCheckedAt={now}
         />
       );
 
-      await waitFor(() => {
-        // Should show approximately 29 hours (24 + 5)
-        const text = screen.getByText(/\d+h \d+m/);
-        expect(text).toBeInTheDocument();
-      });
+      expect(screen.getByText(/\d+h \d+m/)).toBeInTheDocument();
     });
   });
 
   describe("mounting/unmounting", () => {
     it("cleans up interval on unmount", () => {
+      vi.useFakeTimers();
       const now = new Date();
       const { unmount } = render(
         <SlaCountdown
@@ -358,11 +325,11 @@ describe("SlaCountdown", () => {
       unmount();
       const afterUnmountTimerCount = vi.getTimerCount();
 
-      // Interval should be cleared
       expect(afterUnmountTimerCount).toBeLessThan(initialTimerCount);
     });
 
     it("does not cause memory leaks with repeated mounts/unmounts", () => {
+      vi.useFakeTimers();
       const now = new Date();
 
       for (let i = 0; i < 5; i++) {
@@ -376,7 +343,6 @@ describe("SlaCountdown", () => {
         unmount();
       }
 
-      // Should complete without errors
       expect(vi.getTimerCount()).toBeGreaterThanOrEqual(0);
     });
   });
@@ -405,7 +371,7 @@ describe("SlaCountdown", () => {
         />
       );
 
-      expect(screen.queryByText(/clock|time/i)).toBeTruthy();
+      expect(screen.getByText(/\d+h \d+m|sla expired/i)).toBeInTheDocument();
     });
 
     it("does not break with very large slaHours values", () => {

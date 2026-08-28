@@ -1,12 +1,10 @@
 import "server-only";
 
-import { rpc, scValToNative } from "stellar-sdk";
-import type { Registration } from "@prisma/client";
+import { rpc, scValToNative, Contract } from "stellar-sdk";
 
 import { recordAuditLog } from "@/lib/audit";
 import { StructuredLogger } from "@/lib/logger";
 import { prisma } from "@/lib/prisma";
-import { computeReadiness, computeVerified } from "@/lib/readiness";
 
 const logger = new StructuredLogger("contract-sync");
 
@@ -57,8 +55,8 @@ async function fetchContractRegistrations(): Promise<{
   }
 
   try {
-    const server = new rpc.Server(getSorobanRpcUrl());
-    const contract = new (await import("stellar-sdk")).Contract(contractId);
+    void new rpc.Server(getSorobanRpcUrl());
+    const contract = new Contract(contractId);
 
     // Fetch all registrations using get_registered_paginated
     // The contract should return a list of (stellarAddress, githubUsername) tuples
@@ -101,7 +99,7 @@ async function fetchContractRegistrations(): Promise<{
 async function syncContractRegistrations(
   contractRegistrations: ContractRegistration[]
 ): Promise<{ created: number; updated: number; unchanged: number }> {
-  let created = 0;
+  const created = 0;
   let updated = 0;
   let unchanged = 0;
 

@@ -6,6 +6,9 @@
  */
 
 import { type Page, type BrowserContext } from "@playwright/test";
+import { encode } from "next-auth/jwt";
+
+import { E2E_NEXTAUTH_SECRET } from "./env";
 
 export interface FakeSession {
   id?: string;
@@ -72,6 +75,66 @@ export async function mockContributorSession(
     isMaintainer: false,
     ...overrides,
   });
+}
+
+/**
+ * Sign a real NextAuth session cookie into the browser context.
+ *
+ * `mockSession()` only convinces the client — `withAuth` in
+ * `src/middleware.ts` decodes the JWT cookie on the server, so any route it
+ * guards (`/register`, `/dashboard`) bounces to the sign-in page without one.
+ * This mints a genuine token with the same secret the dev server runs under
+ * (see `tests/e2e/env.ts`); no GitHub round trip is involved.
+ */
+export async function signInWithSessionCookie(
+  context: BrowserContext,
+  session: FakeSession = {}
+): Promise<void> {
+  const token = await encode({
+    token: {
+      sub: session.id ?? "test-user-1",
+      name: session.name ?? "Test User",
+      picture: session.image ?? null,
+      githubUsername: session.githubUsername ?? "testuser",
+      isMaintainer: session.isMaintainer ?? false,
+    },
+    secret: E2E_NEXTAUTH_SECRET,
+    maxAge: 24 * 60 * 60,
+  });
+
+  await context.addCookies([
+    {
+      name: "next-auth.session-token",
+      value: token,
+      domain: "localhost",
+      path: "/",
+      httpOnly: true,
+      sameSite: "Lax",
+      expires: Math.floor(Date.now() / 1000) + 24 * 60 * 60,
+    },
+  ]);
+}
+
+/**
+ * Full contributor sign-in: the server-side cookie the middleware checks plus
+ * the client-side `/api/auth/session` payload React reads. Both are needed —
+ * either one alone leaves the page half-authenticated.
+ */
+export async function signInAsContributor(
+  context: BrowserContext,
+  page: Page,
+  overrides: Partial<FakeSession> = {}
+): Promise<void> {
+  const session: FakeSession = {
+    id: "contributor-1",
+    githubUsername: "contributor",
+    name: "Contributor",
+    isMaintainer: false,
+    ...overrides,
+  };
+
+  await signInWithSessionCookie(context, session);
+  await mockSession(page, session);
 }
 
 /** Intercept a GET/POST API endpoint and return a canned response. */

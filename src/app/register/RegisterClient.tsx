@@ -7,6 +7,7 @@ import { useState } from "react";
 import { CheckCircle2, Loader2 } from "lucide-react";
 
 import { AddressInput } from "@/components/AddressInput";
+import { AddressQr } from "@/components/AddressQr";
 import { FreighterProofCard } from "@/components/FreighterProofCard";
 import { OutreachTemplateGenerator } from "@/components/OutreachTemplateGenerator";
 import { TrustlineGuidancePanel } from "@/components/TrustlineGuidancePanel";
@@ -19,7 +20,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { mapRegisterError, type RegisterFailure } from "@/lib/register-error";
+import { isValidGAddress } from "@/lib/stellar-address";
 import { buildWalletProofInfo } from "@/lib/registration-insights";
 import type { HorizonDebugInfo, WalletProofInfo } from "@/types";
 
@@ -174,9 +175,12 @@ export function RegisterClient() {
     buildWalletProofInfo(proofAddress, session?.user?.githubUsername ?? null);
 
   return (
-    <div className="mx-auto max-w-6xl px-4 py-10 sm:px-6">
+    <div className="mx-auto max-w-6xl px-4 py-10 sm:px-6" data-testid="register-page">
       {maintainerError && (
-        <div className="mb-6 rounded-lg border border-amber-500/40 bg-amber-500/10 px-4 py-3 text-sm text-amber-800 dark:border-amber-400/40 dark:bg-amber-950/40 dark:text-amber-200">
+        <div
+          className="mb-6 rounded-lg border border-amber-500/40 bg-amber-500/10 px-4 py-3 text-sm text-amber-800 dark:border-amber-400/40 dark:bg-amber-950/40 dark:text-amber-200"
+          data-testid="maintainer-error"
+        >
           Maintainer dashboard requires membership in the configured GitHub
           organization. You can still register your Stellar address here.
         </div>
@@ -199,7 +203,6 @@ export function RegisterClient() {
             <Card
               className="border-emerald-500/30 bg-emerald-500/5"
               data-testid="current-registration"
-              aria-busy={isPendingSave}
             >
               <CardHeader className="pb-3">
                 <CardTitle className="flex items-center gap-2 text-lg">
@@ -223,18 +226,21 @@ export function RegisterClient() {
                   {existingAddress}
                 </CardDescription>
               </CardHeader>
-              <CardContent>
-                {isPendingSave ? (
-                  // Deliberately no readiness badge while pending: the badge
-                  // is a claim about on-chain state that only the server's
-                  // Horizon check can make.
-                  <p className="text-sm text-muted-foreground">
-                    Confirming with the Stellar network…
-                  </p>
-                ) : (
-                  currentRegistration?.readiness && (
-                    <TrustlineStatusBadge status={currentRegistration.readiness} />
-                  )
+              <CardContent className="space-y-4">
+                {existingQuery.data?.registration?.readiness && (
+                  <TrustlineStatusBadge
+                    status={existingQuery.data.registration.readiness}
+                    showDescription
+                  />
+                )}
+                {isValidGAddress(existingAddress) && (
+                  <div data-testid="current-registration-qr">
+                    <p className="mb-2 text-sm text-muted-foreground">
+                      Scan to confirm the registered payout address on another
+                      device.
+                    </p>
+                    <AddressQr address={existingAddress} />
+                  </div>
                 )}
               </CardContent>
             </Card>
@@ -246,9 +252,9 @@ export function RegisterClient() {
                 {existingAddress ? "Update Stellar address" : "Stellar address"}
               </CardTitle>
               <CardDescription>
-                Enter your public key (starts with G). Validation runs as you
-                type via Horizon, and the proof panel shows the exact Freighter
-                challenge maintainers can ask you to sign.
+                Paste the wallet address you want to be paid to. We check it as
+                you type and tell you what — if anything — is still missing. You
+                can save it now and finish the wallet setup afterwards.
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
@@ -258,24 +264,15 @@ export function RegisterClient() {
                 disabled={saveMutation.isPending}
               />
 
-              {failure && (
-                <div
-                  className="rounded-md border border-destructive/60 bg-destructive/5 px-3 py-2 text-sm text-destructive"
-                  // `alert` rather than a polite region: the save the user just
-                  // asked for did not happen, and the optimistic card they are
-                  // looking at has already reverted underneath them.
+              {saveMutation.isError && (
+                <p
+                  className="text-sm text-destructive"
+                  aria-live="polite"
                   role="alert"
                   data-testid="registration-error"
-                  data-failure-kind={failure.kind}
                 >
-                  <p>{failure.message}</p>
-                  {failure.requiresSignIn && (
-                    <p className="mt-1 text-xs">
-                      Use the sign-in button in the header to start a new
-                      session, then save again.
-                    </p>
-                  )}
-                </div>
+                  {(saveMutation.error as Error).message}
+                </p>
               )}
 
               {saved && !failure && (

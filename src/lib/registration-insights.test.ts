@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 
+import { WIZARD_ACTION_COPY } from "@/lib/action-lookup";
 import {
   buildFreighterProofChallenge,
   buildHorizonDebugInfo,
@@ -39,7 +40,7 @@ describe("registration-insights", () => {
     });
 
     expect(debug.summary).toBe("Account is not funded on Stellar.");
-    expect(debug.nextAction).toContain("Fund your Stellar account");
+    expect(debug.nextAction).toBe(WIZARD_ACTION_COPY.fund_account);
     expect(debug.warnings).toContain("Required USDC trustline is missing.");
   });
 
@@ -55,7 +56,7 @@ describe("registration-insights", () => {
     });
 
     expect(debug.summary).toContain("All Horizon readiness checks currently pass");
-    expect(debug.nextAction).toBe("You're ready for Wave payouts.");
+    expect(debug.nextAction).toBe(WIZARD_ACTION_COPY.none);
     expect(debug.warnings).toEqual([]);
   });
 });

@@ -1,5 +1,7 @@
 import { defineConfig, devices } from "@playwright/test";
 
+import { E2E_DATABASE_URL, E2E_NEXTAUTH_SECRET } from "./tests/e2e/env";
+
 /**
  * Playwright configuration for TrustBridge Dashboard maintainer E2E tests.
  *
@@ -30,6 +32,18 @@ export default defineConfig({
         url: "http://localhost:3000",
         reuseExistingServer: !process.env.CI,
         timeout: 60_000,
+        // The register spec signs its own NextAuth session cookie, so the dev
+        // server has to verify it with the same secret. See tests/e2e/env.ts.
+        env: {
+          NEXTAUTH_SECRET: E2E_NEXTAUTH_SECRET,
+          NEXTAUTH_URL: process.env.NEXTAUTH_URL ?? "http://localhost:3000",
+          DATABASE_URL: E2E_DATABASE_URL,
+          // Placeholders: `next dev` reads these at import time; no test ever
+          // completes a real OAuth round trip.
+          GITHUB_CLIENT_ID: process.env.GITHUB_CLIENT_ID ?? "e2e-placeholder",
+          GITHUB_CLIENT_SECRET:
+            process.env.GITHUB_CLIENT_SECRET ?? "e2e-placeholder",
+        },
       },
 
   projects: [

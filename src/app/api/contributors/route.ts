@@ -31,7 +31,9 @@ export async function GET(request: NextRequest) {
   ) {
     return NextResponse.json(
       {
-        error: Invalid readiness filter "". Must be one of: ,
+        error: `Invalid readiness filter "${readinessParam}". Must be one of: ${Array.from(
+          VALID_READINESS_FILTERS
+        ).join(", ")}`,
       },
       { status: 400 }
     );

@@ -119,3 +119,71 @@ export function buildStellarLabTrustlineUrl(asset = DEFAULT_ASSET): string {
 export const LOBSTR_TRUSTLINE_URL = buildLobstrTrustlineUrl();
 
 export const STELLAR_LAB_TRUSTLINE_URL = buildStellarLabTrustlineUrl();
+
+// ---------------------------------------------------------------------------
+// Wallet install URLs
+// ---------------------------------------------------------------------------
+
+/**
+ * Freighter browser-extension install links.
+ *
+ * Freighter is published to the Chrome Web Store and Firefox Add-ons.
+ * These are stable landing-page URLs that redirect the user to the correct
+ * store for their browser if they land on the Freighter site directly.
+ */
+export const FREIGHTER_INSTALL_URLS = {
+  /** Chrome / Brave / Edge */
+  chrome:
+    "https://chrome.google.com/webstore/detail/freighter/bcacfldlkkdogcmkkibnjlakofdplcbk",
+  /** Firefox */
+  firefox:
+    "https://addons.mozilla.org/en-US/firefox/addon/freighter-app/",
+  /** Canonical landing page — redirects to the right store */
+  site: "https://www.freighter.app/",
+} as const;
+
+/**
+ * LOBSTR wallet install links.
+ *
+ * LOBSTR is available as a mobile app (Android / iOS) and as a browser
+ * extension (Chrome Web Store). The web app at lobstr.co works in any browser
+ * without install.
+ */
+export const LOBSTR_INSTALL_URLS = {
+  android:
+    "https://play.google.com/store/apps/details?id=com.lobstr.client",
+  ios: "https://apps.apple.com/app/lobstr-stellar-wallet/id1452248529",
+  chrome:
+    "https://chrome.google.com/webstore/detail/lobstr-stellar-wallet/aifmhhenlimkohnlghidkcloddoajifn",
+  site: "https://lobstr.co",
+} as const;
+
+/**
+ * xBull wallet install links.
+ *
+ * xBull is a Stellar wallet available as a Progressive Web App, a Chrome
+ * extension, and a Firefox add-on.
+ */
+export const XBULL_INSTALL_URLS = {
+  chrome:
+    "https://chrome.google.com/webstore/detail/xbull-wallet/omajpeaffjgmlpmhbfdjepdejoemifpe",
+  firefox:
+    "https://addons.mozilla.org/en-US/firefox/addon/xbull-wallet/",
+  site: "https://xbull.app",
+} as const;
+
+/**
+ * xBull deep link to add a trustline for an asset.
+ *
+ * xBull reads `asset_code` and `asset_issuer` from the query string and opens
+ * the "Add trustline" flow in the extension / PWA directly.
+ */
+export function buildXBullTrustlineUrl(asset = DEFAULT_ASSET): string {
+  const params = new URLSearchParams({
+    asset_code: asset.code,
+    asset_issuer: asset.issuer,
+  });
+  return `https://xbull.app/deeplink/trustline?${params.toString()}`;
+}
+
+export const XBULL_TRUSTLINE_URL = buildXBullTrustlineUrl();

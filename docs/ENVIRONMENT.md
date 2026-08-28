@@ -226,6 +226,15 @@ CHECK_CACHE_TTL_MS=1  # 1 ms ≈ no caching
 
 ---
 
+### `TRUSTBRIDGE_ACTION_SECRET`
+
+Shared secret used to verify the authenticity of webhook payloads received from the TrustBridge GitHub Action.
+
+- **Server-only** — never expose to the browser
+- **Used by:** Webhook verification at `POST /api/webhooks/trustbridge-action`
+- **Recommended in production.** If unset, signature verification fails and incoming webhooks are rejected with a 401 status.
+- Generate: `openssl rand -base64 32`
+
 ### `SOROBAN_SECRET_KEY`
 
 Secret key for the Soroban fee-payer account used to sign write-through transactions. Required for the `mirrorRegistrationToSoroban()` function to submit transactions to the Soroban contract.
@@ -302,3 +311,224 @@ For preview deployments, set `NEXTAUTH_URL` to the preview URL or use Vercel's a
 - [Setup guide](./SETUP.md)
 - [Deployment](./DEPLOYMENT.md)
 - [Architecture](./ARCHITECTURE.md)
+
+- // src/lib/notifications/webhook.ts
+
+export type WebhookPayload = {
+  event: string;
+  message: string;
+  count?: number;
+  timestamp: string;
+};
+
+const MAX_MESSAGE_LENGTH = 2000;
+
+function validateWebhookUrl(value: string): URL {
+  const url = new URL(value);
+
+  if (url.protocol !== "https:") {
+    throw new Error("Webhook URL must use HTTPS");
+  }
+
+  if (url.username || url.password) {
+    throw new Error("Webhook URL must not contain credentials");
+  }
+
+  return url;
+}
+
+function sanitizeMessage(message: string): string {
+  return message
+    .replace(/G[A-Z0-9]{20,}/gi, "[redacted-address]")
+    .replace(/0x[a-fA-F0-9]{40}/g, "[redacted-address]")
+    .slice(0, MAX_MESSAGE_LENGTH);
+}
+
+export async function sendWebhook(
+  webhookUrl: string,
+  payload: WebhookPayload,
+): Promise<void> {
+  const url = validateWebhookUrl(webhookUrl);
+
+  const body = {
+    ...payload,
+    message: sanitizeMessage(payload.message),
+  };
+
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 5000);
+
+  try {
+    const response = await fetch(url, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+      },
+      body: JSON.stringify(body),
+      signal: controller.signal,
+      redirect: "error",
+    });
+
+    if (!response.ok) {
+      throw new Error(`Webhook returned HTTP ${response.status}`);
+    }
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+// src/lib/notifications/notify.ts
+
+import { sendWebhook } from "./webhook";
+
+type NotificationConfig = {
+  dropThreshold?: number;
+  notReadyThreshold?: number;
+  webhookUrl?: string;
+};
+
+type DropEvent = {
+  collection: string;
+  count: number;
+};
+
+type ReadinessEvent = {
+  count: number;
+};
+
+const lastPost = new Map<string, number>();
+const RATE_LIMIT_MS = 60_000;
+
+function canPost(key: string): boolean {
+  const now = Date.now();
+  const previous = lastPost.get(key) ?? 0;
+
+  if (now - previous < RATE_LIMIT_MS) {
+    return false;
+  }
+
+  lastPost.set(key, now);
+  return true;
+}
+
+function getConfig(): NotificationConfig {
+  return {
+    webhookUrl: process.env.WAVE_WEBHOOK_URL,
+    dropThreshold: Number(process.env.WAVE_DROP_THRESHOLD ?? 10),
+    notReadyThreshold: Number(
+      process.env.WAVE_NOT_READY_THRESHOLD ?? 10,
+    ),
+  };
+}
+
+export async function notifyDropBelowThreshold(
+  event: DropEvent,
+): Promise<boolean> {
+  const config = getConfig();
+
+  if (!config.webhookUrl) return false;
+
+  if (event.count > (config.dropThreshold ?? 10)) {
+    return false;
+  }
+
+  if (!canPost("drop-threshold")) {
+    return false;
+  }
+
+  await sendWebhook(config.webhookUrl, {
+    event: "drop_below_threshold",
+    message:
+      `Collection ${event.collection} dropped below threshold. ` +
+      `Current count: ${event.count}.`,
+    count: event.count,
+    timestamp: new Date().toISOString(),
+  });
+
+  return true;
+}
+
+export async function notifyNotReadySpike(
+  event: ReadinessEvent,
+): Promise<boolean> {
+  const config = getConfig();
+
+  if (!config.webhookUrl) return false;
+
+  if (event.count < (config.notReadyThreshold ?? 10)) {
+    return false;
+  }
+
+  if (!canPost("not-ready-spike")) {
+    return false;
+  }
+
+  await sendWebhook(config.webhookUrl, {
+    event: "not_ready_spike",
+    message:
+      `Not-ready item count has spiked. ` +
+      `Current count: ${event.count}.`,
+    count: event.count,
+    timestamp: new Date().toISOString(),
+  });
+
+  return true;
+}
+
+
+# Environment Variables
+
+## Wave Notifications
+
+### `WAVE_WEBHOOK_URL`
+
+Optional HTTPS webhook used for Wave operational notifications.
+
+Example:
+
+WAVE_WEBHOOK_URL=https://example.com/webhook
+
+Only HTTPS webhook URLs are accepted.
+
+Do not commit webhook URLs to Git.
+
+Do not print the webhook URL in logs, errors, or test output.
+
+### `WAVE_DROP_THRESHOLD`
+
+Controls when a low-drop notification is emitted.
+
+Default:
+
+WAVE_DROP_THRESHOLD=10
+
+### `WAVE_NOT_READY_THRESHOLD`
+
+Controls when a not-ready spike notification is emitted.
+
+Default:
+
+WAVE_NOT_READY_THRESHOLD=10
+
+## Privacy
+
+Notifications do not include wallet addresses by default.
+
+Counts and operational events are preferred over individual records.
+
+If an address is ever required for debugging, it must be
+redacted or hashed before being sent to the webhook.
+
+## Rate Limiting
+
+Notifications are limited to one message per notification type
+per minute to prevent webhook spam.
+
+## Security
+
+Webhook URLs must use HTTPS.
+
+Webhook credentials must not be embedded in URLs.
+
+Webhook URLs must never be logged.
+
+Notification messages must not contain unnecessary PII.

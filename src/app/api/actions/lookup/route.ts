@@ -38,16 +38,20 @@ export async function GET(request: NextRequest) {
 
   const cacheKey = buildCacheKey("action-lookup", address, assetCode, assetIssuer);
 
-  const result = await verificationCache.getOrCompute(
-    cacheKey,
-    async () =>
-      buildActionLookupResult(
-        await checkStellarAddress(address, assetCode, assetIssuer)
-      ),
-    LOOKUP_CACHE_TTL_MS
-  );
+  try {
+    const result = await verificationCache.getOrCompute(
+      cacheKey,
+      async () =>
+        buildActionLookupResult(
+          await checkStellarAddress(address, assetCode, assetIssuer)
+        ),
+      LOOKUP_CACHE_TTL_MS
+    );
 
-  return NextResponse.json(result, {
-    headers: buildLookupCacheHeaders(LOOKUP_CACHE_TTL_MS),
-  });
+    return NextResponse.json(result, {
+      headers: buildLookupCacheHeaders(LOOKUP_CACHE_TTL_MS),
+    });
+  } catch {
+    return NextResponse.json({ error: "Lookup failed" }, { status: 500 });
+  }
 }

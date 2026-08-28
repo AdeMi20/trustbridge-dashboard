@@ -134,6 +134,44 @@ const AMBER_950: [number, number, number] = [21, 92, 8];
 const RED_950: [number, number, number] = [0, 85, 7];
 
 // ---------------------------------------------------------------------------
+// Issue #153 — metrics page + Soroban timeline
+// ---------------------------------------------------------------------------
+
+const WHITE: [number, number, number] = [0, 0, 100];
+
+// Border tokens. `--border` is the hairline every card outline uses;
+// `--border-strong` is the new data-grid divider added for this wave.
+const DARK_BORDER: [number, number, number] = [217.2, 32.6, 28]; // was 22%
+const DARK_BORDER_STRONG: [number, number, number] = [215, 20.2, 42];
+const LIGHT_BORDER_STRONG: [number, number, number] = [214.3, 31.8, 58];
+
+// Dark surfaces the timeline paints on: `bg-muted/50` over the card (thead)
+// and `bg-card/50` over the page background (rows).
+const DARK_MUTED: [number, number, number] = [217.2, 32.6, 17.5];
+
+// Tinted status-box borders on the metrics page (raised -800 → -600 dark,
+// -200 → -300 light so the boxes keep an edge in both themes).
+const EMERALD_600: [number, number, number] = [161, 94, 30];
+const AMBER_600: [number, number, number] = [38, 92, 50];
+const RED_600: [number, number, number] = [0, 72, 51];
+const EMERALD_300_BORDER: [number, number, number] = [152, 76, 73];
+const AMBER_300_BORDER: [number, number, number] = [45, 93, 68];
+const RED_300_BORDER: [number, number, number] = [0, 94, 78];
+
+// Badge stops used by the timeline's type column via `variant="secondary"`.
+const DARK_SECONDARY_FG: [number, number, number] = [210, 40, 98];
+
+/** Contrast of `fg` against `overlay` at `alpha` composited over `base`. */
+function overlayContrast(
+  fg: [number, number, number],
+  overlay: [number, number, number],
+  alpha: number,
+  base: [number, number, number]
+): number {
+  return blendedContrastRatio(fg, overlay, alpha, base);
+}
+
+// ---------------------------------------------------------------------------
 // Test suites
 // ---------------------------------------------------------------------------
 
@@ -317,5 +355,159 @@ describe("WCAG AA: failure path — pre-fix values that violated WCAG (regressio
     const RED_400: [number, number, number] = [0, 91, 30];
     const ratio = r2(contrastRatio(RED_400, DARK_CARD));
     expect(ratio).toBeLessThan(4.5);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Issue #153 — dark-mode polish: metrics page & Soroban event timeline
+// ---------------------------------------------------------------------------
+
+describe("WCAG 1.4.11: data-grid dividers (issue #153)", () => {
+  // Non-text contrast: a rule that separates one row of data from the next is
+  // a meaningful graphical object, so it needs 3:1 — not the 1.6:1 the plain
+  // `--border` hairline was giving on the dark page.
+  const NON_TEXT_MIN = 3.0;
+
+  it("documents the old failure: --border at 22% was invisible on the dark page", () => {
+    const OLD_DARK_BORDER: [number, number, number] = [217.2, 32.6, 22];
+    const ratio = r2(contrastRatio(OLD_DARK_BORDER, DARK_BG));
+    // Must fail 3:1 — this is the defect the wave fixes.
+    expect(ratio).toBeLessThan(NON_TEXT_MIN);
+  });
+
+  it("--border-strong on --background meets non-text contrast (dark)", () => {
+    const ratio = r2(contrastRatio(DARK_BORDER_STRONG, DARK_BG));
+    expect(ratio).toBeGreaterThanOrEqual(NON_TEXT_MIN);
+  });
+
+  it("--border-strong on --card meets non-text contrast (dark)", () => {
+    const ratio = r2(contrastRatio(DARK_BORDER_STRONG, DARK_CARD));
+    expect(ratio).toBeGreaterThanOrEqual(NON_TEXT_MIN);
+  });
+
+  it("--border-strong on white meets non-text contrast (light)", () => {
+    const ratio = r2(contrastRatio(LIGHT_BORDER_STRONG, WHITE));
+    expect(ratio).toBeGreaterThanOrEqual(NON_TEXT_MIN);
+  });
+
+  it("--border-strong is not so light it becomes neon-on-dark", () => {
+    // The other half of "readable": a divider brighter than the body text
+    // turns a table into a grid of glowing lines. Keep it under the text.
+    const dividerVsText = r2(contrastRatio(DARK_BORDER_STRONG, DARK_FOREGROUND));
+    expect(dividerVsText).toBeGreaterThan(1);
+    expect(
+      r2(contrastRatio(DARK_BORDER_STRONG, DARK_BG))
+    ).toBeLessThan(r2(contrastRatio(DARK_FOREGROUND, DARK_BG)));
+  });
+
+  it("the raised --border hairline still beats the value it replaced", () => {
+    const OLD_DARK_BORDER: [number, number, number] = [217.2, 32.6, 22];
+    expect(r2(contrastRatio(DARK_BORDER, DARK_BG))).toBeGreaterThan(
+      r2(contrastRatio(OLD_DARK_BORDER, DARK_BG))
+    );
+  });
+});
+
+describe("WCAG AA: Soroban event timeline text (issue #153)", () => {
+  const NORMAL_TEXT_MIN = 4.5;
+
+  it("header text on bg-muted/50 over the dark card meets AA", () => {
+    const ratio = r2(overlayContrast(DARK_FOREGROUND, DARK_MUTED, 0.5, DARK_CARD));
+    expect(ratio).toBeGreaterThanOrEqual(NORMAL_TEXT_MIN);
+  });
+
+  it("muted header label on bg-muted/50 over the dark card meets AA", () => {
+    const ratio = r2(overlayContrast(DARK_MUTED_FG, DARK_MUTED, 0.5, DARK_CARD));
+    expect(ratio).toBeGreaterThanOrEqual(NORMAL_TEXT_MIN);
+  });
+
+  it("row body text on bg-card/50 over the dark background meets AA", () => {
+    const ratio = r2(overlayContrast(DARK_FOREGROUND, DARK_CARD, 0.5, DARK_BG));
+    expect(ratio).toBeGreaterThanOrEqual(NORMAL_TEXT_MIN);
+  });
+
+  it("the relative-time column (muted) on bg-card/50 meets AA", () => {
+    // Monospace hashes and relative timestamps are the smallest text in the
+    // table — they sit on the half-opacity card, not the card itself.
+    const ratio = r2(overlayContrast(DARK_MUTED_FG, DARK_CARD, 0.5, DARK_BG));
+    expect(ratio).toBeGreaterThanOrEqual(NORMAL_TEXT_MIN);
+  });
+
+  it("the 'system' type badge (secondary) is readable on the dark row", () => {
+    // Badge fill is --secondary; its foreground must clear AA against it.
+    const ratio = r2(contrastRatio(DARK_SECONDARY_FG, DARK_MUTED));
+    expect(ratio).toBeGreaterThanOrEqual(NORMAL_TEXT_MIN);
+  });
+
+  it("error-list text (--destructive) on bg-destructive/5 over the page meets AA", () => {
+    const ratio = r2(overlayContrast(DARK_DESTRUCTIVE, DARK_DESTRUCTIVE, 0.05, DARK_BG));
+    expect(ratio).toBeGreaterThanOrEqual(NORMAL_TEXT_MIN);
+  });
+
+  it("a heavier error tint would break AA — pins the /5 alpha in place", () => {
+    // The tint is decoration; the text is the point. At /10 the panel lifts
+    // enough to drag `text-destructive` down to ~4.0:1, so don't "polish" it up.
+    const heavier = r2(overlayContrast(DARK_DESTRUCTIVE, DARK_DESTRUCTIVE, 0.1, DARK_BG));
+    expect(heavier).toBeLessThan(NORMAL_TEXT_MIN);
+  });
+});
+
+describe("WCAG 1.4.11: metrics status-box borders (issue #153)", () => {
+  const NON_TEXT_MIN = 3.0;
+
+  it("documents the old failure: emerald-800 border on the dark page was under 3:1", () => {
+    const EMERALD_800: [number, number, number] = [163, 94, 20];
+    const ratio = r2(blendedContrastRatio(EMERALD_800, EMERALD_950, 0.4, DARK_BG));
+    expect(ratio).toBeLessThan(NON_TEXT_MIN);
+  });
+
+  it("emerald-600 border on the blended emerald box meets non-text contrast (dark)", () => {
+    const ratio = r2(blendedContrastRatio(EMERALD_600, EMERALD_950, 0.4, DARK_BG));
+    expect(ratio).toBeGreaterThanOrEqual(NON_TEXT_MIN);
+  });
+
+  it("amber-600 border on the blended amber box meets non-text contrast (dark)", () => {
+    const ratio = r2(blendedContrastRatio(AMBER_600, AMBER_950, 0.4, DARK_BG));
+    expect(ratio).toBeGreaterThanOrEqual(NON_TEXT_MIN);
+  });
+
+  it("red-600 border on the blended red box meets non-text contrast (dark)", () => {
+    const ratio = r2(blendedContrastRatio(RED_600, RED_950, 0.4, DARK_BG));
+    expect(ratio).toBeGreaterThanOrEqual(NON_TEXT_MIN);
+  });
+
+  it("light-mode status-box borders are darker than the -200 stops they replaced", () => {
+    const EMERALD_200: [number, number, number] = [152, 76, 85];
+    expect(r2(contrastRatio(EMERALD_300_BORDER, WHITE))).toBeGreaterThan(
+      r2(contrastRatio(EMERALD_200, WHITE))
+    );
+    expect(r2(contrastRatio(AMBER_300_BORDER, WHITE))).toBeGreaterThan(1);
+    expect(r2(contrastRatio(RED_300_BORDER, WHITE))).toBeGreaterThan(1);
+  });
+});
+
+describe("WCAG AA: metrics operational-config rows (issue #153)", () => {
+  const NORMAL_TEXT_MIN = 4.5;
+
+  it("the env-var hint at full muted-foreground meets AA on the dark card", () => {
+    // Was `text-muted-foreground/70`; the env-var name is the string a
+    // maintainer copies, so it runs at full strength now.
+    const ratio = r2(contrastRatio(DARK_MUTED_FG, DARK_CARD));
+    expect(ratio).toBeGreaterThanOrEqual(NORMAL_TEXT_MIN);
+  });
+
+  it("the config-row border clears non-text contrast against the dark card", () => {
+    // These boxes carry no fill — the border is the only thing making a config
+    // row a row, so it runs at full `--border-strong`, not a faded alpha.
+    const ratio = r2(contrastRatio(DARK_BORDER_STRONG, DARK_CARD));
+    expect(ratio).toBeGreaterThanOrEqual(3.0);
+    expect(ratio).toBeGreaterThan(r2(contrastRatio(DARK_BORDER, DARK_CARD)));
+  });
+
+  it("the metrics error alert text meets AA on its tinted dark panel", () => {
+    const ratio = r2(
+      blendedContrastRatio(DARK_DESTRUCTIVE, DARK_DESTRUCTIVE, 0.05, DARK_BG)
+    );
+    expect(ratio).toBeGreaterThanOrEqual(NORMAL_TEXT_MIN);
   });
 });

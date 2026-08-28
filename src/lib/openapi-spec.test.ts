@@ -103,6 +103,18 @@ describe("OpenAPI Spec Generation", () => {
       expect(statsPath.get.responses["200"]).toBeDefined();
     });
 
+    it("documents POST /api/webhooks/trustbridge-action endpoint", () => {
+      const spec = generateOpenAPISpec();
+      const webhookPath = spec.paths["/api/webhooks/trustbridge-action"];
+
+      expect(webhookPath.post).toBeDefined();
+      expect(webhookPath.post.summary).toContain("webhook");
+      expect(webhookPath.post.requestBody).toBeDefined();
+      expect(webhookPath.post.responses["202"]).toBeDefined();
+      expect(webhookPath.post.responses["401"]).toBeDefined();
+      expect(webhookPath.post.responses["400"]).toBeDefined();
+    });
+
     it("includes component schemas for all entity types", () => {
       const spec = generateOpenAPISpec();
 
@@ -113,6 +125,7 @@ describe("OpenAPI Spec Generation", () => {
       expect(spec.components!.schemas!.CheckResult).toBeDefined();
       expect(spec.components!.schemas!.ContributorList).toBeDefined();
       expect(spec.components!.schemas!.DashboardStats).toBeDefined();
+      expect(spec.components!.schemas!.WebhookPayload).toBeDefined();
     });
 
     it("defines security schemes", () => {

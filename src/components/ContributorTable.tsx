@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useId, useMemo, useState } from "react";
+import Link from "next/link";
 import {
   ArrowUpDown,
   Download,
@@ -8,11 +9,13 @@ import {
   RefreshCw,
   Search,
   SlidersHorizontal,
+  Users,
 } from "lucide-react";
 
 import { TrustlineStatusBadge } from "@/components/TrustlineStatusBadge";
 import { VerifiedBadge } from "@/components/VerifiedBadge";
 import { Button } from "@/components/ui/button";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { Input } from "@/components/ui/input";
 import {
   CONTRIBUTOR_COLUMNS,
@@ -42,6 +45,7 @@ import type { ContributorRow } from "@/types";
 
 type FilterOption = ContributorFilter;
 type SortKey = ContributorSortKey;
+type ContributorViewerRole = "maintainer" | "contributor";
 
 interface ContributorTableProps {
   contributors: ContributorRow[];
@@ -50,8 +54,96 @@ interface ContributorTableProps {
   recheckingId?: string | null;
   onLoadMore?: () => void;
   hasMore?: boolean;
+  isLoading?: boolean;
   isLoadingMore?: boolean;
+  /** Drives copy in the zero-contributors empty state. */
+  viewerRole?: ContributorViewerRole;
+  /** Registration page path for invite/share actions. Defaults to `/register`. */
+  registerUrl?: string;
   className?: string;
+}
+
+function ContributorsZeroEmptyState({
+  viewerRole,
+  registerUrl,
+}: {
+  viewerRole: ContributorViewerRole;
+  registerUrl: string;
+}) {
+  const isMaintainer = viewerRole === "maintainer";
+
+  async function copyRegisterLink() {
+    const url =
+      typeof window !== "undefined"
+        ? `${window.location.origin}${registerUrl}`
+        : registerUrl;
+    await navigator.clipboard.writeText(url);
+  }
+
+  return (
+    <div
+      role="status"
+      aria-live="polite"
+      data-testid="contributors-zero-empty"
+      className="rounded-xl border border-dashed bg-muted/20 px-6 py-12 text-center"
+    >
+      <Users
+        className="mx-auto h-10 w-10 text-muted-foreground"
+        aria-hidden="true"
+      />
+      <h3 className="mt-4 text-lg font-semibold">
+        {isMaintainer
+          ? "No contributors registered yet"
+          : "You are not registered yet"}
+      </h3>
+      <p className="mx-auto mt-2 max-w-md text-sm text-muted-foreground">
+        {isMaintainer
+          ? "Share the registration link with wave contributors so they can connect a Stellar payout address and appear in this table."
+          : "Register your Stellar payout address to join the wave and show up in the readiness table."}
+      </p>
+      <p className="mx-auto mt-3 max-w-md text-sm font-medium">
+        What to do next:{" "}
+        {isMaintainer
+          ? "Open the register page and share its URL, or generate invite links for your team."
+          : "Complete registration with your GitHub account and Stellar address."}
+      </p>
+      <div className="mt-6 flex flex-wrap justify-center gap-3">
+        <Button asChild variant="stellar">
+          <Link href={registerUrl}>
+            {isMaintainer ? "Open register page" : "Register now"}
+          </Link>
+        </Button>
+        {isMaintainer && (
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => void copyRegisterLink()}
+          >
+            Copy register link
+          </Button>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function ContributorsFilteredEmptyState({
+  search,
+}: {
+  search: string;
+}) {
+  return (
+    <div
+      role="status"
+      aria-live="polite"
+      data-testid="contributors-filtered-empty"
+      className="rounded-xl border bg-card px-4 py-8 text-center text-sm text-muted-foreground"
+    >
+      {search.trim()
+        ? `No contributors match "${search}". Try a different username or Stellar address.`
+        : "No contributors match this filter. Choose a different readiness filter or clear your search."}
+    </div>
+  );
 }
 
 function ContributorDebugPanel({ row }: { row: ContributorRow }) {
@@ -185,7 +277,10 @@ export function ContributorTable({
   recheckingId,
   onLoadMore,
   hasMore = false,
+  isLoading = false,
   isLoadingMore = false,
+  viewerRole = "maintainer",
+  registerUrl = "/register",
   className,
 }: ContributorTableProps) {
   const columnPickerId = useId();
@@ -203,6 +298,9 @@ export function ContributorTable({
     () => defaultVisibleColumns()
   );
   const [showColumnPicker, setShowColumnPicker] = useState(false);
+  // Which export the confirmation dialog is standing in front of, or null when
+  // it is closed. Both formats share one dialog.
+  const [pendingExport, setPendingExport] = useState<"csv" | "json" | null>(null);
 
   const staleSummary = useMemo(
     () => buildStalenessSummary(contributors),
@@ -326,6 +424,32 @@ export function ContributorTable({
     );
   }
 
+  if (isLoading) {
+    return (
+      <div className={cn("space-y-4", className)} aria-busy="true">
+        <div
+          className="flex items-center justify-center py-20 text-muted-foreground"
+          role="status"
+          data-testid="contributors-loading"
+        >
+          <Loader2 className="mr-2 h-5 w-5 animate-spin" aria-hidden="true" />
+          Loading contributors...
+        </div>
+      </div>
+    );
+  }
+
+  if (contributors.length === 0) {
+    return (
+      <div className={cn("space-y-4", className)}>
+        <ContributorsZeroEmptyState
+          viewerRole={viewerRole}
+          registerUrl={registerUrl}
+        />
+      </div>
+    );
+  }
+
   return (
     <section
       id="contributor-table"
@@ -400,7 +524,7 @@ export function ContributorTable({
               ref={csvExportRef}
               size="sm"
               variant={staleSummary.stale ? "destructive" : "outline"}
-              onClick={() => runExport(() => onExport?.(), csvExportRef)}
+              onClick={() => setPendingExport("csv")}
               title={staleSummary.warning}
             >
               <Download className="h-4 w-4" />
@@ -410,12 +534,7 @@ export function ContributorTable({
               ref={jsonExportRef}
               size="sm"
               variant={staleSummary.stale ? "destructive" : "outline"}
-              onClick={() =>
-                runExport(
-                  () => exportContributorsJson(contributors, staleSummary.stale),
-                  jsonExportRef
-                )
-              }
+              onClick={() => setPendingExport("json")}
               title={staleSummary.warning}
             >
               <Download className="h-4 w-4" />
@@ -477,11 +596,7 @@ export function ContributorTable({
 
       <div className="space-y-4 md:hidden">
         {filtered.length === 0 ? (
-          <div className="rounded-xl border bg-card px-4 py-8 text-center text-sm text-muted-foreground">
-            {search
-              ? `No contributors match "${search}".`
-              : "No contributors match this filter."}
-          </div>
+          <ContributorsFilteredEmptyState search={search} />
         ) : (
           filtered.map((row) => (
             <MobileContributorCard
@@ -566,13 +681,8 @@ export function ContributorTable({
           <tbody>
             {filtered.length === 0 ? (
               <tr>
-                <td
-                  colSpan={emptyStateColSpan}
-                  className="px-4 py-8 text-center text-muted-foreground"
-                >
-                  {search
-                    ? `No contributors match "${search}".`
-                    : "No contributors match this filter."}
+                <td colSpan={emptyStateColSpan} className="p-0">
+                  <ContributorsFilteredEmptyState search={search} />
                 </td>
               </tr>
             ) : (
@@ -655,7 +765,50 @@ export function ContributorTable({
           </Button>
         </div>
       )}
-    </section>
+
+      {/*
+        A contributor export carries GitHub handles, wallet addresses and
+        balances, so it gets a real confirmation rather than the browser's
+        `window.confirm()`. `force` is passed on confirm because the maintainer
+        has now seen the staleness warning in the dialog — asking twice is how
+        confirmations get click-through-ignored.
+      */}
+      <ConfirmDialog
+        open={pendingExport !== null}
+        title={
+          pendingExport === "json"
+            ? "Export contributor data as JSON?"
+            : "Export contributor data as CSV?"
+        }
+        description={
+          <>
+            This downloads{" "}
+            <strong className="text-foreground">
+              {contributors.length} contributor
+              {contributors.length === 1 ? "" : "s"}
+            </strong>{" "}
+            to your device, including GitHub handles, Stellar addresses and
+            balances. Handle the file as personal data.
+          </>
+        }
+        warning={staleSummary.stale ? staleSummary.warning : undefined}
+        confirmLabel={
+          pendingExport === "json" ? "Download JSON" : "Download CSV"
+        }
+        cancelLabel="Cancel"
+        destructive={staleSummary.stale}
+        onCancel={() => setPendingExport(null)}
+        onConfirm={() => {
+          const format = pendingExport;
+          setPendingExport(null);
+          if (format === "json") {
+            exportContributorsJson(contributors, true);
+          } else {
+            onExport?.();
+          }
+        }}
+      />
+    </div>
   );
 }
 

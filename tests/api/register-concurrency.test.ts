@@ -66,6 +66,11 @@ vi.mock("@/lib/audit", () => ({
   recordAuditLog: vi.fn().mockResolvedValue(undefined),
 }));
 
+vi.mock("@/lib/address-history", () => ({
+  recordInitialAddress: vi.fn().mockResolvedValue(undefined),
+  recordAddressChange: vi.fn().mockResolvedValue(undefined),
+}));
+
 import { getServerSession } from "next-auth";
 import { checkStellarAddress } from "@/lib/horizon";
 import { prisma } from "@/lib/prisma";

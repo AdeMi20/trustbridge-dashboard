@@ -75,7 +75,10 @@ export default function MetricsPage() {
 
   if (metricsQuery.isError) {
     return (
-      <p className="text-destructive py-8">
+      <p
+        className="my-8 rounded-lg border border-destructive/60 bg-destructive/5 px-4 py-3 text-sm text-destructive"
+        role="alert"
+      >
         Failed to load metrics. Make sure you are signed in as a maintainer.
       </p>
     );
@@ -83,19 +86,25 @@ export default function MetricsPage() {
 
   const data = metricsQuery.data!;
   const { contributors, audit, config } = data;
+  const auditEntries = Object.entries(audit.byAction).sort((a, b) => b[1] - a[1]);
 
   return (
-    <div className="mx-auto max-w-5xl px-4 py-10 sm:px-6">
+    <div
+      className="mx-auto max-w-5xl px-4 py-8 sm:px-6 sm:py-10"
+      data-testid="metrics-page"
+    >
       {/* Header */}
-      <div className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+      <div className="mb-6 flex flex-col gap-4 sm:mb-8 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-3xl font-bold">Admin metrics</h1>
-          <p className="mt-2 text-muted-foreground">
+          <h1 className="text-2xl font-bold sm:text-3xl">Admin metrics</h1>
+          <p className="mt-2 text-sm text-muted-foreground sm:text-base">
             Real-time operational snapshot for the TrustBridge maintainer team.
           </p>
         </div>
         <Button
           variant="outline"
+          size="lg"
+          className="w-full sm:w-auto"
           onClick={() => metricsQuery.refetch()}
           disabled={metricsQuery.isFetching}
         >
@@ -128,8 +137,8 @@ export default function MetricsPage() {
           {/* Dark mode: -300 heading + -200 sub-label on dark:bg-*-950/40 gives
               ≥ 7:1 contrast against the page background (WCAG AAA).
               Light mode: -700 on white/tinted bg gives ≥ 6.5:1 (WCAG AA). */}
-          <div className="grid grid-cols-3 gap-4 text-center">
-            <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-4 dark:border-emerald-800 dark:bg-emerald-950/40">
+          <div className="grid grid-cols-1 gap-3 text-center sm:grid-cols-3 sm:gap-4">
+            <div className="min-h-11 rounded-lg border border-emerald-300 bg-emerald-50 px-4 py-4 dark:border-emerald-600 dark:bg-emerald-950/40">
               <p className="text-2xl font-bold text-emerald-700 dark:text-emerald-300">
                 {contributors.byStatus.ready}
               </p>
@@ -137,7 +146,7 @@ export default function MetricsPage() {
                 ✅ Ready
               </p>
             </div>
-            <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-4 dark:border-amber-800 dark:bg-amber-950/40">
+            <div className="min-h-11 rounded-lg border border-amber-300 bg-amber-50 px-4 py-4 dark:border-amber-600 dark:bg-amber-950/40">
               <p className="text-2xl font-bold text-amber-700 dark:text-amber-300">
                 {contributors.byStatus.low_reserve}
               </p>
@@ -145,7 +154,7 @@ export default function MetricsPage() {
                 ⚠️ Low reserve
               </p>
             </div>
-            <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-4 dark:border-red-800 dark:bg-red-950/40">
+            <div className="min-h-11 rounded-lg border border-red-300 bg-red-50 px-4 py-4 dark:border-red-600 dark:bg-red-950/40">
               <p className="text-2xl font-bold text-red-700 dark:text-red-300">
                 {contributors.byStatus.not_ready}
               </p>
@@ -173,29 +182,67 @@ export default function MetricsPage() {
           </CardDescription>
         </CardHeader>
         <CardContent>
-          {Object.keys(audit.byAction).length === 0 ? (
+          {auditEntries.length === 0 ? (
             <p className="text-sm text-muted-foreground">
               No audit events recorded yet.
             </p>
           ) : (
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b text-left text-muted-foreground">
-                  <th className="pb-2 font-medium">Action</th>
-                  <th className="pb-2 text-right font-medium">Count</th>
-                </tr>
-              </thead>
-              <tbody>
-                {Object.entries(audit.byAction)
-                  .sort((a, b) => b[1] - a[1])
-                  .map(([action, count]) => (
-                    <tr key={action} className="border-b last:border-0">
-                      <td className="py-2 font-mono text-xs">{action}</td>
-                      <td className="py-2 text-right tabular-nums">{count}</td>
+            <>
+              <ul
+                className="space-y-3 sm:hidden"
+                aria-label="Audit log entry counts by action, most frequent first"
+                data-testid="metrics-audit-mobile"
+              >
+                {auditEntries.map(([action, count]) => (
+                  <li
+                    key={action}
+                    className="min-h-11 rounded-lg border border-border-strong px-4 py-3"
+                  >
+                    <div className="flex items-center justify-between gap-4">
+                      <span className="font-mono text-xs">{action}</span>
+                      <span className="tabular-nums font-medium">{count}</span>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+
+              <div
+                className="hidden overflow-x-auto sm:block"
+                data-testid="metrics-audit-table"
+              >
+                <table className="w-full min-w-[320px] text-sm">
+                  <caption className="sr-only">
+                    Audit log entry counts by action, most frequent first.
+                  </caption>
+                  <thead>
+                    <tr className="border-b-2 border-border-strong text-left text-muted-foreground">
+                      <th scope="col" className="pb-2 font-medium">
+                        Action
+                      </th>
+                      <th scope="col" className="pb-2 text-right font-medium">
+                        Count
+                      </th>
                     </tr>
-                  ))}
-              </tbody>
-            </table>
+                  </thead>
+                  <tbody>
+                    {auditEntries.map(([action, count]) => (
+                      <tr
+                        key={action}
+                        className="border-b border-border-strong last:border-0"
+                      >
+                        <th
+                          scope="row"
+                          className="py-3 text-left font-mono text-xs font-normal"
+                        >
+                          {action}
+                        </th>
+                        <td className="py-3 text-right tabular-nums">{count}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </>
           )}
         </CardContent>
       </Card>
@@ -266,10 +313,12 @@ function ConfigRow({
   hint: string;
 }) {
   return (
-    <div className="rounded-md border px-3 py-2">
+    <div className="min-h-11 rounded-md border border-border-strong px-3 py-3 sm:py-2">
       <dt className="text-xs text-muted-foreground">{label}</dt>
       <dd className="mt-0.5 font-medium">{value}</dd>
-      <dd className="mt-0.5 font-mono text-xs text-muted-foreground/70">{hint}</dd>
+      {/* Full-strength muted foreground: the env-var name is the part a
+          maintainer copies, so it should not be the faintest thing on screen. */}
+      <dd className="mt-0.5 font-mono text-xs text-muted-foreground">{hint}</dd>
     </div>
   );
 }

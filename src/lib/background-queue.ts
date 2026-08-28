@@ -34,9 +34,18 @@ class BackgroundQueue {
   private maxConcurrentJobs = 2;
   private jobHandlers: Map<JobType, (job: Job) => Promise<void>> = new Map();
   private pollInterval: ReturnType<typeof setInterval> | null = null;
+  private workerStarted = false;
+
+  private shouldAutoStartWorker(): boolean {
+    return (
+      process.env.NODE_ENV !== "production" &&
+      process.env.NODE_ENV !== "test" &&
+      process.env.VITEST !== "true"
+    );
+  }
 
   constructor() {
-    if (process.env.NODE_ENV !== "production") {
+    if (this.shouldAutoStartWorker()) {
       this.startWorker();
     }
   }
@@ -46,7 +55,7 @@ class BackgroundQueue {
     handler: (job: Job) => Promise<void>
   ): void {
     this.jobHandlers.set(type, handler);
-    if (!this.pollInterval) {
+    if (!this.workerStarted && this.shouldAutoStartWorker()) {
       this.startWorker();
     }
   }
@@ -97,17 +106,6 @@ class BackgroundQueue {
         prisma.queueJob.count({ where: { status: "failed" } }),
       ]);
 
-    const avgResult = await prisma.queueJob.aggregate({
-      where: {
-        status: { in: ["completed", "failed"] },
-        startedAt: { not: null },
-        completedAt: { not: null },
-      },
-      _avg: {
-        id: true,
-      },
-    });
-
     // Calculate average processing time from recent completed jobs
     const recentJobs = await prisma.queueJob.findMany({
       where: {
@@ -139,6 +137,9 @@ class BackgroundQueue {
   }
 
   private async startWorker(): Promise<void> {
+    if (this.workerStarted) return;
+    this.workerStarted = true;
+
     while (true) {
       try {
         if (

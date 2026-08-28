@@ -61,6 +61,9 @@ const envSchema = z.object({
   // Webhook secret (optional, but required if using org membership sync)
   GITHUB_WEBHOOK_SECRET: z.string().optional(),
 
+  // trustbridge-action webhook secret (optional, but required for action sync verification)
+  TRUSTBRIDGE_ACTION_SECRET: z.string().optional(),
+
   // Circuit breaker configuration
   HORIZON_CB_FAILURE_THRESHOLD: z
     .string()
