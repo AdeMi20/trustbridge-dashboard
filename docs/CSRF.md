@@ -28,6 +28,7 @@ Because the application uses **cookie-based session authentication** (NextAuth J
 | `/api/stats` | GET | No (read-only, safe method) |
 | `/api/contributors` | GET | No (read-only, auth already enforced) |
 | `/api/register` | GET | No (read-only, auth already enforced) |
+| `/api/address-history` | GET | No (read-only, auth already enforced) |
 
 ---
 
