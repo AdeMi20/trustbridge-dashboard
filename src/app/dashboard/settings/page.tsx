@@ -4,6 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Loader2 } from "lucide-react";
 
 import { NetworkStatusPanel } from "@/components/NetworkStatusPanel";
+import { SessionPanel } from "@/components/SessionPanel";
 import {
   Card,
   CardContent,
@@ -48,6 +49,10 @@ export default function MaintainerSettingsPage() {
           Network configuration and recent maintainer activity for this
           TrustBridge deployment.
         </p>
+      </div>
+
+      <div className="mb-8">
+        <SessionPanel />
       </div>
 
       <div className="mb-8">

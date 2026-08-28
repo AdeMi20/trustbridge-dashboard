@@ -25,7 +25,15 @@ export function Providers({ children }: { children: React.ReactNode }) {
       <QueryClientProvider client={queryClient}>
         <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
           <Header />
-          <main>{children}</main>
+          {/*
+            The single `main` landmark, and the target of the skip link in
+            `layout.tsx`. `tabIndex={-1}` makes it focusable by the skip link
+            without adding it to the tab order — without it, Safari and Firefox
+            move the viewport but leave focus where it was.
+          */}
+          <main id="main-content" tabIndex={-1} className="outline-none">
+            {children}
+          </main>
         </ThemeProvider>
       </QueryClientProvider>
     </SessionProvider>

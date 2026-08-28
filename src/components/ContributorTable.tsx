@@ -113,9 +113,6 @@ function MobileContributorCard({
   row,
   onRecheck,
   recheckingId,
-  onLoadMore,
-  hasMore = false,
-  isLoadingMore = false,
 }: {
   row: ContributorRow;
   onRecheck?: (id: string) => void;
@@ -186,10 +183,18 @@ export function ContributorTable({
   onExport,
   onRecheck,
   recheckingId,
+  onLoadMore,
+  hasMore = false,
+  isLoadingMore = false,
   className,
 }: ContributorTableProps) {
   const columnPickerId = useId();
   const searchInputId = useId();
+  const headingId = useId();
+  const columnPickerRef = React.useRef<HTMLFieldSetElement | null>(null);
+  const columnPickerToggleRef = React.useRef<HTMLButtonElement | null>(null);
+  const csvExportRef = React.useRef<HTMLButtonElement | null>(null);
+  const jsonExportRef = React.useRef<HTMLButtonElement | null>(null);
   const [filter, setFilter] = useState<FilterOption>("all");
   const [sortKey, setSortKey] = useState<SortKey>("githubUsername");
   const [sortAsc, setSortAsc] = useState(true);
@@ -204,6 +209,14 @@ export function ContributorTable({
     [contributors]
   );
 
+  React.useEffect(() => {
+    if (!showColumnPicker) return;
+    // Focus the panel itself, not its first checkbox: landing on a checkbox
+    // reads as "Stellar address, checked" with no announcement of what the
+    // panel is or how to leave it.
+    columnPickerRef.current?.focus();
+  }, [showColumnPicker]);
+
   const filtered = useMemo(() => {
     const byFilter = filterContributors(contributors, filter);
     const bySearch = searchContributors(byFilter, search);
@@ -217,6 +230,54 @@ export function ContributorTable({
     }
     setSortKey(key);
     setSortAsc(true);
+  }
+
+  /**
+   * Run an export and hand focus back to the button that started it.
+   *
+   * Both export paths go through `window.confirm()`, which is a modal dialog:
+   * the browser takes focus for the prompt and, in Chrome and Safari, does not
+   * reliably return it to the trigger. A keyboard user is then dropped at the
+   * top of the document and has to tab back through the whole toolbar — which
+   * for this table means the search box, four filter buttons, the column
+   * toggle, and every visible column checkbox.
+   */
+  function runExport(
+    action: () => void,
+    trigger: React.RefObject<HTMLButtonElement>
+  ) {
+    try {
+      action();
+    } finally {
+      trigger.current?.focus();
+    }
+  }
+
+  /**
+   * Closing the column picker must return focus to the toggle that opened it.
+   * The panel's checkboxes are removed from the DOM on close; whatever focus
+   * was inside it goes to `document.body` unless it is moved deliberately.
+   */
+  function closeColumnPicker() {
+    setShowColumnPicker(false);
+    columnPickerToggleRef.current?.focus();
+  }
+
+  function handleColumnPickerKeyDown(
+    event: React.KeyboardEvent<HTMLFieldSetElement>
+  ) {
+    if (event.key === "Escape") {
+      event.stopPropagation();
+      closeColumnPicker();
+    }
+  }
+
+  function toggleColumnPicker() {
+    if (showColumnPicker) {
+      closeColumnPicker();
+      return;
+    }
+    setShowColumnPicker(true);
   }
 
   function toggleColumn(key: ContributorColumnKey) {
@@ -266,8 +327,24 @@ export function ContributorTable({
   }
 
   return (
-    <div className={cn("space-y-4", className)}>
-      <div className="flex flex-wrap items-end gap-3">
+    <section
+      id="contributor-table"
+      aria-labelledby={headingId}
+      tabIndex={-1}
+      className={cn("space-y-4 outline-none", className)}
+      data-testid="contributor-table-region"
+    >
+      <h2 id={headingId} className="sr-only">
+        Contributor payout readiness
+      </h2>
+
+      {/* Labelled so a screen reader announces "Contributor table controls"
+          rather than an unnamed group of eleven buttons. */}
+      <div
+        className="flex flex-wrap items-end gap-3"
+        role="group"
+        aria-label="Contributor table controls"
+      >
         <div className="relative min-w-[220px] max-w-sm flex-1">
           <label htmlFor={searchInputId} className="sr-only">
             Search contributors by GitHub username or Stellar address
@@ -306,10 +383,11 @@ export function ContributorTable({
         </fieldset>
 
         <Button
+          ref={columnPickerToggleRef}
           size="sm"
           variant="outline"
-          onClick={() => setShowColumnPicker((current) => !current)}
-          aria-pressed={showColumnPicker}
+          onClick={toggleColumnPicker}
+          aria-expanded={showColumnPicker}
           aria-controls={columnPickerId}
         >
           <SlidersHorizontal className="h-4 w-4" />
@@ -319,18 +397,25 @@ export function ContributorTable({
         {onExport && (
           <div className="flex flex-wrap gap-2">
             <Button
+              ref={csvExportRef}
               size="sm"
               variant={staleSummary.stale ? "destructive" : "outline"}
-              onClick={onExport}
+              onClick={() => runExport(() => onExport?.(), csvExportRef)}
               title={staleSummary.warning}
             >
               <Download className="h-4 w-4" />
               {staleSummary.stale ? "Export CSV (stale)" : "Export CSV"}
             </Button>
             <Button
+              ref={jsonExportRef}
               size="sm"
               variant={staleSummary.stale ? "destructive" : "outline"}
-              onClick={() => exportContributorsJson(contributors, staleSummary.stale)}
+              onClick={() =>
+                runExport(
+                  () => exportContributorsJson(contributors, staleSummary.stale),
+                  jsonExportRef
+                )
+              }
               title={staleSummary.warning}
             >
               <Download className="h-4 w-4" />
@@ -341,10 +426,18 @@ export function ContributorTable({
       </div>
 
       {showColumnPicker && (
-        <fieldset id={columnPickerId} className="rounded-lg border bg-card px-4 py-3">
+        <fieldset
+          id={columnPickerId}
+          ref={columnPickerRef}
+          tabIndex={-1}
+          onKeyDown={handleColumnPickerKeyDown}
+          className="rounded-lg border bg-card px-4 py-3 outline-none"
+          data-testid="column-picker"
+        >
           <legend className="mb-2 text-sm font-medium text-muted-foreground">
             Toggle visible columns
           </legend>
+          <p className="sr-only">Press Escape to close and return to the Columns button.</p>
           <div className="flex flex-wrap gap-3">
             {CONTRIBUTOR_COLUMNS.map((col) => (
               <label
@@ -562,7 +655,7 @@ export function ContributorTable({
           </Button>
         </div>
       )}
-    </div>
+    </section>
   );
 }
 

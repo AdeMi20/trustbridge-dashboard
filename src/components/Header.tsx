@@ -28,7 +28,10 @@ export function Header() {
         </div>
 
         {/* Center — nav links stay centered, unchanged */}
-        <nav className="hidden items-center gap-6 text-sm font-medium md:flex">
+        <nav
+          aria-label="Main"
+          className="hidden items-center gap-6 text-sm font-medium md:flex"
+        >
           <Link
             href="/"
             className="text-muted-foreground transition-colors hover:text-foreground"

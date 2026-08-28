@@ -1,9 +1,14 @@
 import { describe, it, expect } from "vitest";
 import {
+  formatMachineDate,
+  formatTemplateDate,
+  formatTemplateNumber,
   generateEmailTemplate,
   generateMarkdownTemplate,
   generatePlainTemplate,
   generateTemplate,
+  SUPPORTED_TEMPLATE_LOCALES,
+  type TemplateFormat,
   type TemplateOptions,
 } from "./outreach-templates";
 
@@ -163,6 +168,219 @@ describe("outreach-templates", () => {
       expect(email).toContain("trustbridge.dev");
       expect(markdown).toContain("trustbridge.dev");
       expect(plain).toContain("trustbridge.dev");
+    });
+  });
+});
+
+// ── Issue #150: locale-aware dates and numbers ─────────────────────────────
+
+describe("locale-aware formatting", () => {
+  /**
+   * Fixed inputs across every locale case. A wave number, a G-address and an
+   * asset code are identifiers; a deadline and an XLM amount are the only two
+   * values that should ever change shape between locales.
+   */
+  const localeOptions: TemplateOptions = {
+    contributorName: "Alice",
+    waveNumber: 3,
+    // UTC midnight, exactly what `<input type="date">` produces.
+    deadline: new Date("2026-08-01T00:00:00.000Z"),
+    minXlmBalance: 1.5,
+    supportEmail: "help@example.com",
+    assetCode: "USDC",
+    assetIssuer: "GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVN",
+  };
+
+  const LOCALES = SUPPORTED_TEMPLATE_LOCALES.map((entry) => entry.value);
+
+  describe("formatTemplateDate", () => {
+    it.each([
+      ["en-US", "August 1, 2026"],
+      ["en-GB", "1 August 2026"],
+      ["es-ES", "1 de agosto de 2026"],
+      ["pt-BR", "1 de agosto de 2026"],
+      ["fr-FR", "1 août 2026"],
+      ["de-DE", "1. August 2026"],
+    ])("renders the deadline for %s", (locale, expected) => {
+      expect(
+        formatTemplateDate(new Date("2026-08-01T00:00:00.000Z"), locale)
+      ).toBe(expected);
+    });
+
+    it("defaults to en-US when no locale is given", () => {
+      expect(formatTemplateDate(new Date("2026-08-01T00:00:00.000Z"))).toBe(
+        "August 1, 2026"
+      );
+    });
+
+    it("renders the calendar day that was picked, not the reader's local day", () => {
+      // The bug this replaces: `toLocaleDateString` in a zone behind UTC turned
+      // a 1 August deadline into 31 July for every reader west of Greenwich.
+      const deadline = new Date("2026-08-01T00:00:00.000Z");
+
+      expect(formatTemplateDate(deadline, "en-US")).toBe("August 1, 2026");
+      expect(formatTemplateDate(deadline, "en-US", "UTC")).toBe("August 1, 2026");
+      // Explicitly asking for a western zone is the caller's choice, and does
+      // shift the day — which is why UTC is the default.
+      expect(formatTemplateDate(deadline, "en-US", "America/Los_Angeles")).toBe(
+        "July 31, 2026"
+      );
+    });
+
+    it("is stable across zones for a late-evening UTC deadline", () => {
+      const deadline = new Date("2026-08-01T23:30:00.000Z");
+      expect(formatTemplateDate(deadline, "en-US")).toBe("August 1, 2026");
+    });
+  });
+
+  describe("formatTemplateNumber", () => {
+    it.each([
+      ["en-US", 1.5, "1.5"],
+      ["de-DE", 1.5, "1,5"],
+      ["fr-FR", 1.5, "1,5"],
+      ["es-ES", 1.5, "1,5"],
+      ["pt-BR", 1.5, "1,5"],
+      ["en-US", 2, "2"],
+      ["de-DE", 2, "2"],
+    ])("formats %s %s as %s", (locale, value, expected) => {
+      expect(formatTemplateNumber(value as number, locale as string)).toBe(
+        expected
+      );
+    });
+
+    it("keeps precision for fractional reserves", () => {
+      expect(formatTemplateNumber(0.0000001, "en-US")).toBe("0.0000001");
+    });
+
+    it("defaults to en-US", () => {
+      expect(formatTemplateNumber(1.5)).toBe("1.5");
+    });
+  });
+
+  describe("formatMachineDate", () => {
+    it("stays ISO 8601 regardless of locale", () => {
+      // CSV and API payloads must remain parseable — a spreadsheet cannot read
+      // "1 de agosto de 2026" back into a date.
+      expect(formatMachineDate(new Date("2026-08-01T00:00:00.000Z"))).toBe(
+        "2026-08-01"
+      );
+    });
+  });
+
+  describe("templates honour the locale", () => {
+    it.each(LOCALES)("email renders a localized deadline for %s", (locale) => {
+      const template = generateEmailTemplate({ ...localeOptions, locale });
+      expect(template).toContain(
+        formatTemplateDate(localeOptions.deadline!, locale)
+      );
+    });
+
+    it.each(LOCALES)("email renders a localized XLM amount for %s", (locale) => {
+      const template = generateEmailTemplate({ ...localeOptions, locale });
+      expect(template).toContain(`${formatTemplateNumber(1.5, locale)} XLM`);
+    });
+
+    it.each(LOCALES)("markdown honours %s", (locale) => {
+      const template = generateMarkdownTemplate({ ...localeOptions, locale });
+      expect(template).toContain(
+        formatTemplateDate(localeOptions.deadline!, locale)
+      );
+      expect(template).toContain(`${formatTemplateNumber(1.5, locale)} XLM`);
+    });
+
+    it.each(LOCALES)("plain honours %s", (locale) => {
+      const template = generatePlainTemplate({ ...localeOptions, locale });
+      expect(template).toContain(
+        formatTemplateDate(localeOptions.deadline!, locale)
+      );
+      expect(template).toContain(`${formatTemplateNumber(1.5, locale)} XLM`);
+    });
+
+    it("a non-English locale actually changes the output", () => {
+      // Guards against the locale being threaded through but never applied.
+      const english = generateEmailTemplate({
+        ...localeOptions,
+        locale: "en-US",
+      });
+      const german = generateEmailTemplate({ ...localeOptions, locale: "de-DE" });
+
+      expect(german).not.toBe(english);
+      expect(german).toContain("1,5 XLM");
+      expect(english).toContain("1.5 XLM");
+    });
+  });
+
+  describe("identifiers are never localized", () => {
+    const ARABIC_INDIC = "ar-EG";
+
+    it.each([...LOCALES, ARABIC_INDIC])(
+      "the G-address survives %s byte-for-byte",
+      (locale) => {
+        const template = generateEmailTemplate({ ...localeOptions, locale });
+        expect(template).toContain(localeOptions.assetIssuer!);
+      }
+    );
+
+    it.each([...LOCALES, ARABIC_INDIC])(
+      "the asset code survives %s",
+      (locale) => {
+        const template = generateEmailTemplate({ ...localeOptions, locale });
+        expect(template).toContain("USDC");
+      }
+    );
+
+    it.each([...LOCALES, ARABIC_INDIC])(
+      "the wave number stays a plain integer in %s",
+      (locale) => {
+        // A grouped "Wave 1.000" would be wrong in a subject line and a
+        // filename — the wave number identifies a payout round, it is not a
+        // quantity.
+        const template = generateEmailTemplate({
+          ...localeOptions,
+          waveNumber: 1000,
+          locale,
+        });
+        expect(template).toContain("Wave 1000 Payout Readiness Check");
+      }
+    );
+
+    it("the support email survives every locale", () => {
+      for (const locale of LOCALES) {
+        expect(
+          generateEmailTemplate({ ...localeOptions, locale })
+        ).toContain("help@example.com");
+      }
+    });
+  });
+
+  // Snapshot keys are explicit and locale-scoped so a new locale appends a
+  // record rather than renumbering every existing one.
+  describe("locale snapshots", () => {
+    const FORMATS: TemplateFormat[] = ["email", "markdown", "plain"];
+
+    for (const format of FORMATS) {
+      for (const locale of LOCALES) {
+        it(`${format} template renders for ${locale}`, () => {
+          const template = generateTemplate(format, {
+            ...localeOptions,
+            locale,
+          });
+          expect(template).toMatchSnapshot(`${format}--${locale}`);
+        });
+      }
+    }
+  });
+
+  describe("backwards compatibility", () => {
+    it("omitting the locale reproduces the previous en-US output", () => {
+      const withoutLocale = generateEmailTemplate(localeOptions);
+      const withEnUs = generateEmailTemplate({
+        ...localeOptions,
+        locale: "en-US",
+      });
+
+      expect(withoutLocale).toBe(withEnUs);
+      expect(withoutLocale).toContain("August 1, 2026");
     });
   });
 });
