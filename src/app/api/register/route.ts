@@ -20,6 +20,54 @@ import { recordInitialAddress, recordAddressChange } from "@/lib/address-history
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
+/**
+ * Machine-readable failure reasons for `POST /api/register`.
+ *
+ * The client rolls an optimistic save back differently depending on *why* the
+ * server said no: a taken address means keep the form, show the conflict, and
+ * let the contributor try another wallet; an expired session means the whole
+ * page is stale and re-authenticating is the only useful next step. Matching
+ * on the human-readable `error` string to tell those apart would break the
+ * moment someone reworded it, so the reason travels as a stable code
+ * alongside the message.
+ *
+ * `error` is unchanged and stays the string a human reads.
+ */
+export const REGISTER_ERROR_CODES = {
+  /** Not signed in, or the session expired mid-form. */
+  unauthorized: "UNAUTHORIZED",
+  /** Request failed the same-origin check. */
+  forbiddenOrigin: "FORBIDDEN_ORIGIN",
+  /** Address is missing or is not a well-formed G-address. */
+  validationFailed: "VALIDATION_FAILED",
+  /** The unique constraint on `Registration.stellarAddress` rejected it. */
+  addressTaken: "ADDRESS_TAKEN",
+  /** Anything else — the cause stays in Sentry, not in the response. */
+  serverError: "SERVER_ERROR",
+} as const;
+
+export type RegisterErrorCode =
+  (typeof REGISTER_ERROR_CODES)[keyof typeof REGISTER_ERROR_CODES];
+
+/**
+ * Is this Prisma's unique-constraint error for `Registration.stellarAddress`?
+ *
+ * Matched structurally (`code === "P2002"` plus the offending target) rather
+ * than by message text, which Prisma is free to reword between versions.
+ */
+function isUniqueAddressViolation(error: unknown): boolean {
+  if (typeof error !== "object" || error === null) return false;
+  const candidate = error as { code?: unknown; meta?: { target?: unknown } };
+  if (candidate.code !== "P2002") return false;
+
+  const target = candidate.meta?.target;
+  if (typeof target === "string") return target.includes("stellarAddress");
+  if (Array.isArray(target)) return target.includes("stellarAddress");
+  // P2002 with no usable target: still a uniqueness conflict, and the only
+  // unique column this route writes is the address.
+  return true;
+}
+
 export async function POST(request: NextRequest) {
   const csrf = assertSameOrigin(request);
   if (csrf) return csrf;
@@ -27,7 +75,10 @@ export async function POST(request: NextRequest) {
   const session = await getServerSession(authOptions);
 
   if (!session?.user?.id) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    return NextResponse.json(
+      { error: "Unauthorized", code: REGISTER_ERROR_CODES.unauthorized },
+      { status: 401 }
+    );
   }
 
   try {
@@ -39,6 +90,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(
         {
           error: validationErrors[0].message,
+          code: REGISTER_ERROR_CODES.validationFailed,
           validationErrors,
         },
         { status: 400 }
@@ -53,7 +105,10 @@ export async function POST(request: NextRequest) {
 
     if (existing && existing.userId !== session.user.id) {
       return NextResponse.json(
-        { error: "This Stellar address is already registered to another user" },
+        {
+          error: "This Stellar address is already registered to another user",
+          code: REGISTER_ERROR_CODES.addressTaken,
+        },
         { status: 409 }
       );
     }
@@ -157,8 +212,22 @@ export async function POST(request: NextRequest) {
       method: "POST",
       userId: session.user.id,
     });
+    // A racing writer can slip between the `findUnique` above and this upsert
+    // and claim the address first; Postgres then rejects the unique index.
+    // That is the same conflict as the pre-check, so it gets the same answer
+    // rather than a generic 500 the client cannot act on.
+    if (isUniqueAddressViolation(error)) {
+      return NextResponse.json(
+        {
+          error: "This Stellar address is already registered to another user",
+          code: REGISTER_ERROR_CODES.addressTaken,
+        },
+        { status: 409 }
+      );
+    }
+
     return NextResponse.json(
-      { error: "Failed to save registration" },
+      { error: "Failed to save registration", code: REGISTER_ERROR_CODES.serverError },
       { status: 500 }
     );
   }
@@ -168,7 +237,10 @@ export async function GET() {
   const session = await getServerSession(authOptions);
 
   if (!session?.user?.id) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    return NextResponse.json(
+      { error: "Unauthorized", code: REGISTER_ERROR_CODES.unauthorized },
+      { status: 401 }
+    );
   }
 
   const registration = await prisma.registration.findUnique({

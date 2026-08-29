@@ -21,6 +21,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { countReadyContributors } from "@/lib/contributors";
+import { useJobProgress } from "@/lib/use-job-progress";
 import {
   flattenContributorPages,
   useInfiniteContributors,
@@ -149,8 +150,23 @@ export default function DashboardPage() {
 
   return (
     <div className="mx-auto max-w-6xl px-4 py-10 sm:px-6">
+      {/*
+        The dashboard's own skip link. `layout.tsx` gets a keyboard user to
+        `main`; from there the contributor table is still past the re-check
+        controls, the network panel, the wave overview and the Wave prep
+        workspace — roughly thirty tab stops on a populated dashboard.
+      */}
+      <a
+        href="#contributor-table"
+        data-testid="skip-to-table"
+        className="sr-only rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground focus:not-sr-only focus:absolute focus:left-4 focus:top-4 focus:z-50 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
+      >
+        Skip to contributor table
+      </a>
+
       <div className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
+          {/* The only h1 on this page — every region below opens at h2. */}
           <h1 className="text-3xl font-bold">Maintainer dashboard</h1>
           <p className="mt-2 text-muted-foreground">
             Wave payout readiness across all registered contributors. Re-check
@@ -186,6 +202,10 @@ export default function DashboardPage() {
         </div>
       </div>
 
+      <p className="sr-only" role="status" aria-live="polite">
+        {recheckStatus ? `Batch re-check: ${recheckStatus}` : ""}
+      </p>
+
       {event?.type === "completed" && (
         <Card className="mb-4 border-green-200 bg-green-50 dark:border-green-800 dark:bg-green-950">
           <CardContent className="py-3 text-sm text-green-800 dark:text-green-200">
@@ -209,9 +229,9 @@ export default function DashboardPage() {
         <NetworkStatusPanel config={networkQuery.data} className="mb-8" />
       )}
 
-      <Card className="mb-8">
+      <Card className="mb-8" role="region" aria-labelledby="wave-overview-heading">
         <CardHeader>
-          <CardTitle>Wave overview</CardTitle>
+          <CardTitle id="wave-overview-heading">Wave overview</CardTitle>
           <CardDescription>
             Green = funded + USDC trustline + sufficient XLM. Yellow = low
             reserve. Red = missing trustline or unfunded.
@@ -266,9 +286,11 @@ export default function DashboardPage() {
 
       <DisputePanel contributors={contributors} />
 
-      <Card className="mt-8">
+      <Card className="mt-8" role="region" aria-labelledby="soroban-timeline-heading">
         <CardHeader>
-          <CardTitle>Soroban event timeline</CardTitle>
+          <CardTitle id="soroban-timeline-heading">
+            Soroban event timeline
+          </CardTitle>
           <CardDescription>
             Recent on-chain events for the configured registry contract
             (<code>SOROBAN_CONTRACT_ID</code>). Filter by event type and

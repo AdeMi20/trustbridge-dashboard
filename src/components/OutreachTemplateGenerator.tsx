@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Copy, Download } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -14,7 +14,10 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
+  DEFAULT_TEMPLATE_LOCALE,
+  DEFAULT_TEMPLATE_TIME_ZONE,
   generateTemplate,
+  SUPPORTED_TEMPLATE_LOCALES,
   type TemplateFormat,
   type TemplateOptions,
 } from "@/lib/outreach-templates";
@@ -33,6 +36,7 @@ export function OutreachTemplateGenerator({
   assetIssuer = "GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVN",
 }: OutreachTemplateGeneratorProps) {
   const [format, setFormat] = useState<TemplateFormat>("email");
+  const [locale, setLocale] = useState<string>(DEFAULT_TEMPLATE_LOCALE);
   const [contributorName, setContributorName] = useState("");
   const [minXlmBalance, setMinXlmBalance] = useState("1");
   const [deadline, setDeadline] = useState(
@@ -50,12 +54,23 @@ export function OutreachTemplateGenerator({
       supportEmail,
       assetCode,
       assetIssuer,
+      locale,
+      // The date input hands back a calendar day; render it in UTC so the day
+      // in the email is the day the maintainer picked, wherever it is read.
+      timeZone: DEFAULT_TEMPLATE_TIME_ZONE,
     };
 
     const generated = generateTemplate(format, options);
     setTemplate(generated);
     setCopied(false);
   };
+
+  // A stale preview is worse than no preview: after switching locale the old
+  // text still looks plausible, so the maintainer copies the wrong dates.
+  useEffect(() => {
+    setTemplate("");
+    setCopied(false);
+  }, [locale, format]);
 
   const handleCopy = () => {
     navigator.clipboard.writeText(template).then(() => {
@@ -100,6 +115,30 @@ export function OutreachTemplateGenerator({
                 <option value="markdown">Markdown</option>
                 <option value="plain">Plain Text</option>
               </select>
+            </div>
+
+            <div>
+              <Label htmlFor="template-locale">Language / Region</Label>
+              <select
+                id="template-locale"
+                value={locale}
+                onChange={(e) => setLocale(e.target.value)}
+                aria-describedby="template-locale-help"
+                className="mt-2 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+              >
+                {SUPPORTED_TEMPLATE_LOCALES.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+              <p
+                id="template-locale-help"
+                className="mt-1 text-xs text-muted-foreground"
+              >
+                Formats the deadline and the XLM amount. The template wording
+                stays in English.
+              </p>
             </div>
 
             <div>

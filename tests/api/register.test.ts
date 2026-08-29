@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from "vitest";
+import { beforeEach, describe, it, expect, vi } from "vitest";
 import { NextRequest } from "next/server";
 import { POST } from "@/app/api/register/route";
 
@@ -141,5 +141,141 @@ describe("POST /api/register", () => {
     );
     expect(json.registration.horizonDebug.summary).toContain("All Horizon");
     expect(mirrorRegistrationToSoroban).toHaveBeenCalled();
+  });
+});
+
+// ── Issue #146: machine-readable error shape ───────────────────────────────
+
+describe("POST /api/register — error codes", () => {
+  const validAddress =
+    "GDXNXL25GDM3N5LAR5FALA3VSGHFET3EOKLXRP3ITPPMR3PISTQSKSFS";
+  const otherAddress =
+    "GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVN";
+
+  function signedIn(userId = "user-1") {
+    vi.mocked(getServerSession).mockResolvedValue({
+      user: { id: userId, githubUsername: "contributor" },
+    } as never);
+  }
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.mocked(checkStellarAddress).mockResolvedValue({
+      funded: true,
+      trustline: true,
+      trustline_authorized: true,
+      verified: true,
+      xlm_balance: "10",
+      spendable_xlm_balance: "8",
+      usdc_balance: "0",
+      errors: [],
+      readiness: "ready",
+    } as never);
+    vi.mocked(mirrorRegistrationToSoroban).mockResolvedValue(undefined as never);
+  });
+
+  it("tags an unauthenticated request with UNAUTHORIZED", async () => {
+    vi.mocked(getServerSession).mockResolvedValue(null as never);
+
+    const res = await POST(post({ stellarAddress: validAddress }));
+    const body = await res.json();
+
+    expect(res.status).toBe(401);
+    expect(body.code).toBe("UNAUTHORIZED");
+    // The human-readable message is unchanged.
+    expect(body.error).toBe("Unauthorized");
+  });
+
+  it("tags a malformed address with VALIDATION_FAILED", async () => {
+    signedIn();
+
+    const res = await POST(post({ stellarAddress: "not-an-address" }));
+    const body = await res.json();
+
+    expect(res.status).toBe(400);
+    expect(body.code).toBe("VALIDATION_FAILED");
+    expect(Array.isArray(body.validationErrors)).toBe(true);
+  });
+
+  it("tags a contested address with ADDRESS_TAKEN", async () => {
+    signedIn("user-1");
+    // Someone else already holds it.
+    vi.mocked(prisma.registration.findUnique).mockResolvedValue({
+      id: "reg-9",
+      userId: "user-2",
+      stellarAddress: validAddress,
+    } as never);
+
+    const res = await POST(post({ stellarAddress: validAddress }));
+    const body = await res.json();
+
+    expect(res.status).toBe(409);
+    expect(body.code).toBe("ADDRESS_TAKEN");
+    expect(body.error).toMatch(/already registered/i);
+  });
+
+  it("distinguishes ADDRESS_TAKEN from UNAUTHORIZED", async () => {
+    // These are the two the client must never conflate: one is recoverable by
+    // editing the form, the other by signing in again.
+    vi.mocked(getServerSession).mockResolvedValue(null as never);
+    const unauth = await (await POST(post({ stellarAddress: validAddress }))).json();
+
+    vi.clearAllMocks();
+    signedIn("user-1");
+    vi.mocked(checkStellarAddress).mockResolvedValue({
+      funded: true,
+      trustline: true,
+      trustline_authorized: true,
+      verified: true,
+      xlm_balance: "10",
+      spendable_xlm_balance: "8",
+      usdc_balance: "0",
+      errors: [],
+      readiness: "ready",
+    } as never);
+    vi.mocked(prisma.registration.findUnique).mockResolvedValue({
+      id: "reg-9",
+      userId: "user-2",
+      stellarAddress: validAddress,
+    } as never);
+    const conflict = await (await POST(post({ stellarAddress: validAddress }))).json();
+
+    expect(unauth.code).not.toBe(conflict.code);
+  });
+
+  it("maps a racing unique-constraint violation to 409, not 500", async () => {
+    // Two writers pass the `findUnique` pre-check together; Postgres rejects
+    // the loser at the index. The client can act on a conflict; it can do
+    // nothing useful with a generic server error.
+    signedIn("user-1");
+    vi.mocked(prisma.registration.findUnique).mockResolvedValue(null as never);
+    vi.mocked(prisma.registration.upsert).mockRejectedValue(
+      Object.assign(new Error("Unique constraint failed"), {
+        code: "P2002",
+        meta: { target: ["stellarAddress"] },
+      }) as never
+    );
+
+    const res = await POST(post({ stellarAddress: otherAddress }));
+    const body = await res.json();
+
+    expect(res.status).toBe(409);
+    expect(body.code).toBe("ADDRESS_TAKEN");
+  });
+
+  it("still returns SERVER_ERROR for unrelated failures", async () => {
+    signedIn("user-1");
+    vi.mocked(prisma.registration.findUnique).mockResolvedValue(null as never);
+    vi.mocked(prisma.registration.upsert).mockRejectedValue(
+      new Error("connection reset") as never
+    );
+
+    const res = await POST(post({ stellarAddress: otherAddress }));
+    const body = await res.json();
+
+    expect(res.status).toBe(500);
+    expect(body.code).toBe("SERVER_ERROR");
+    // The cause stays in Sentry, not in the response.
+    expect(JSON.stringify(body)).not.toMatch(/connection reset/);
   });
 });

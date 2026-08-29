@@ -4,6 +4,7 @@ import type { NextAuthOptions } from "next-auth";
 import GitHubProvider from "next-auth/providers/github";
 
 import { prisma } from "@/lib/prisma";
+import { SESSION_MAX_AGE_SECONDS } from "@/lib/session-info";
 import { decryptToken, encryptToken } from "@/lib/token-crypto";
 import { recordTokenAudit } from "@/lib/token-audit";
 import { recordAuditLog } from "@/lib/audit";
@@ -107,6 +108,10 @@ export const authOptions: NextAuthOptions = {
   ],
   session: {
     strategy: "jwt",
+    // Stated explicitly rather than inherited, because the account panel
+    // reports this number back to the user. `SESSION_MAX_AGE_SECONDS` in
+    // `src/lib/session-info.ts` must stay in step — a test asserts it does.
+    maxAge: SESSION_MAX_AGE_SECONDS,
   },
   callbacks: {
     async jwt({ token, account, profile }) {
