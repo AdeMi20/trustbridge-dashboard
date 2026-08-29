@@ -356,8 +356,6 @@ export function WalletInstallStepper({ className }: WalletInstallStepperProps) {
     }
   }
 
-  const active = WALLETS[activeIdx];
-
   return (
     <div className={className}>
       {/* Tab list */}
