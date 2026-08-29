@@ -6,6 +6,7 @@ import { assertSameOrigin } from "@/lib/csrf";
 import { getRegistryMode } from "@/lib/registry-mode";
 import { getContributors } from "@/lib/registrations";
 import { backgroundQueue } from "@/lib/background-queue";
+import { buildStalenessSummary } from "@/lib/stale-export";
 import { captureException } from "@/lib/sentry";
 import type { ReadinessStatus } from "@/types";
 
@@ -42,6 +43,8 @@ export async function GET(request: NextRequest) {
   try {
     const { contributors: allContributors, total } = await getContributors();
 
+    const staleness = buildStalenessSummary(allContributors);
+
     const contributors =
       readinessParam !== null
         ? allContributors.filter((c) => c.readiness === readinessParam)
@@ -52,6 +55,7 @@ export async function GET(request: NextRequest) {
       total,
       filtered: contributors.length,
       registryMode: getRegistryMode(),
+      staleness,
       ...(readinessParam !== null ? { readiness: readinessParam } : {}),
     });
   } catch (error) {

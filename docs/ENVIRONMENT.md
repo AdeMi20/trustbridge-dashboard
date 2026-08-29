@@ -287,6 +287,62 @@ Minimum time between `/api/contract-sync` runs; a trigger inside this window ret
 
 ---
 
+## Prometheus metrics (optional)
+
+### `PROMETHEUS_SCRAPE_TOKENS`
+
+Comma-separated list of bearer tokens that authorize `/api/metrics/prometheus`
+scrapes without requiring a maintainer browser session. Intended for
+Prometheus / VictoriaMetrics / Grafana Agent.
+
+```
+PROMETHEUS_SCRAPE_TOKENS=prod-scrape-token-abc,staging-scrape-token-xyz
+```
+
+- Each token should be ≥ 32 chars of high entropy; generate with `openssl rand -base64 32`
+- **Server-only** — never commit tokens or expose them in `NEXT_PUBLIC_*`
+- When unset, the endpoint falls back to requiring a maintainer session (cookie auth)
+- Session auth and token auth are OR'd: either succeeds, both are never required
+
+#### Example Prometheus `scrape_configs`
+
+```yaml
+scrape_configs:
+  - job_name: trustbridge-dashboard
+    scrape_interval: 30s
+    metrics_path: /api/metrics/prometheus
+    static_configs:
+      - targets: ["trustbridge.example.com"]
+    scheme: https
+    authorization:
+      type: Bearer
+      credentials: "prod-scrape-token-abc"
+```
+
+#### Exported metrics (all maintainer-scoped, no PII in labels)
+
+| Metric | Type | Labels | Notes |
+| --- | --- | --- | --- |
+| `trustbridge_contributors_total` | gauge | — | |
+| `trustbridge_contributors_ready` | gauge | — | |
+| `trustbridge_contributors_low_reserve` | gauge | — | |
+| `trustbridge_contributors_not_ready` | gauge | — | |
+| `trustbridge_circuit_breaker_state` | gauge | — | 0=CLOSED, 1=HALF_OPEN, 2=OPEN |
+| `trustbridge_circuit_breaker_total_trips` | counter | — | Process-local since start |
+| `trustbridge_circuit_breaker_failure_count` | gauge | — | Current consecutive failures |
+| `trustbridge_circuit_breaker_last_failure_timestamp_seconds` | gauge | — | 0 if none, else Unix seconds |
+| `trustbridge_rate_limit_active_identifiers` | gauge | — | Count inside current window (process-local) |
+| `trustbridge_rate_limit_requests_allowed_total` | counter | — | Process-local since start |
+| `trustbridge_rate_limit_requests_blocked_total` | counter | — | Process-local since start |
+| `trustbridge_process_local_info` | gauge | `scope="process"` | Always 1 — honest marker that counters are per-process, not globally aggregated, until Redis-backed state ships. |
+
+⚠️ **Cardinality / PII policy:** the route never emits dynamic labels (no per-user,
+per-IP, per-address). All label sets are static. Addresses / GitHub handles / IPs
+are never serialized into the metrics body. If you add new metrics, keep this
+contract.
+
+---
+
 ## Vercel configuration
 
 1. Project → **Settings** → **Environment Variables**
