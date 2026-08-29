@@ -16,6 +16,37 @@ npx playwright show-report              # last run
 | `tests/e2e/register.spec.ts` | Contributor registration: sign in, paste an address, read the readiness result, save, copy the Freighter proof. |
 | `tests/e2e/maintainer.spec.ts` | Maintainer dashboard: access control, contributor table, re-check, metrics, settings. |
 
+## Accessibility gate (axe-core)
+
+Issue #142. Each spec file has one test that signs in, loads its page to a
+fully-settled state (mocked APIs resolved, key content visible), and runs
+[`@axe-core/playwright`](https://www.npmjs.com/package/@axe-core/playwright)
+against it:
+
+- `register.spec.ts` → "the register page has no axe violations beyond the
+  baseline" — scans `/register` as a signed-in contributor.
+- `maintainer.spec.ts` → "the dashboard page has no axe violations beyond the
+  baseline" — scans `/dashboard` as a signed-in maintainer.
+
+Both scans run with `withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa"])`
+(axe-core's own best-practice-only rules, like landmark/region checks, are
+left out — noisy and not what WCAG conformance requires) and are gated by the
+existing `test:e2e` script, so they run in CI on every push and PR with no
+separate workflow step.
+
+**Baseline allowlist.** `tests/e2e/axe-baseline.ts` exports
+`AXE_BASELINE_RULE_IDS`, a short, dated, commented list of axe rule ids
+excluded from both gates via `filterBaselineViolations()`. Today it holds only
+`color-contrast`, because contrast is already covered by the from-scratch WCAG
+luminance calculator in `src/lib/dark-mode-contrast-audit.test.ts` — running
+axe's own contrast heuristic on top would duplicate that poorly (it flags
+transitioning, off-screen, and gradient-background text that unit tests
+already reason about correctly). Anything else added to this list should carry
+the same kind of comment: which rule, why it can't be fixed in this PR, and
+when to revisit. Keep it short — the point of the gate is to catch real
+regressions, not to grow a bigger exemption list every time a test is
+inconvenient.
+
 ## Signing in without GitHub
 
 Two things have to believe the user is signed in, and they are checked in
