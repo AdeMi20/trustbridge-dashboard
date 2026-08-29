@@ -28,7 +28,7 @@ export async function POST(request: NextRequest) {
 
   try {
     // Find the contributor's existing registration
-    const registration = await prisma.registration.findUnique({
+    const registration = await prisma.registration.findFirst({
       where: { userId: session.user.id },
       include: {
         user: {

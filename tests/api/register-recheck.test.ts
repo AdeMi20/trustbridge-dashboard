@@ -14,6 +14,7 @@ vi.mock("@/lib/prisma", () => ({
   prisma: {
     registration: {
       findUnique: vi.fn(),
+      findFirst: vi.fn(),
       update: vi.fn(),
     },
   },
@@ -75,7 +76,7 @@ describe("POST /api/register/recheck (self-service)", () => {
     vi.mocked(getServerSession).mockResolvedValue({
       user: { id: "user-1", githubUsername: "testuser" },
     } as any);
-    vi.mocked(prisma.registration.findUnique).mockResolvedValue(null);
+    vi.mocked(prisma.registration.findFirst).mockResolvedValue(null);
 
     const r = post();
     const res = await POST(r);
@@ -136,7 +137,7 @@ describe("POST /api/register/recheck (self-service)", () => {
     vi.mocked(getServerSession).mockResolvedValue({
       user: { id: "user-1", githubUsername: "testuser" },
     } as any);
-    vi.mocked(prisma.registration.findUnique).mockResolvedValue(
+    vi.mocked(prisma.registration.findFirst).mockResolvedValue(
       mockRegistration as any
     );
     vi.mocked(checkStellarAddress).mockResolvedValue(mockHorizonResult);
@@ -174,7 +175,7 @@ describe("POST /api/register/recheck (self-service)", () => {
     vi.mocked(getServerSession).mockResolvedValue({
       user: { id: "user-1", githubUsername: "testuser" },
     } as any);
-    vi.mocked(prisma.registration.findUnique).mockResolvedValue(
+    vi.mocked(prisma.registration.findFirst).mockResolvedValue(
       mockRegistration as any
     );
     vi.mocked(checkStellarAddress).mockRejectedValue(

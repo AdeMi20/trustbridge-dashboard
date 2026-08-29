@@ -41,6 +41,7 @@ function resolveNudgeReason(registration: {
 
 async function loadNotReadyContributors() {
   const registrations = await prisma.registration.findMany({
+    where: { deletedAt: null },
     include: {
       user: {
         select: {

@@ -105,6 +105,7 @@ async function syncContractRegistrations(
 
   // Get all existing registrations from Postgres
   const existingRegistrations = await prisma.registration.findMany({
+    where: { deletedAt: null },
     select: {
       id: true,
       stellarAddress: true,

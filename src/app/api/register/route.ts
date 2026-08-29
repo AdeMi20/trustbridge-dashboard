@@ -99,9 +99,17 @@ export async function POST(request: NextRequest) {
 
     const stellarAddress = body.stellarAddress!.trim();
 
-    const existing = await prisma.registration.findUnique({
-      where: { stellarAddress },
+    const existing = await prisma.registration.findFirst({
+      where: { stellarAddress, deletedAt: null },
     });
+
+    const userRegistration = await prisma.registration.findUnique({
+      where: { userId: session.user.id },
+    });
+    const activeUserRegistration =
+      userRegistration && !userRegistration.deletedAt
+        ? userRegistration
+        : null;
 
     if (existing && existing.userId !== session.user.id) {
       return NextResponse.json(
@@ -114,7 +122,9 @@ export async function POST(request: NextRequest) {
     }
 
     // Check if user is updating their address (different from current)
-    const isAddressChange = existing && existing.stellarAddress !== stellarAddress;
+    const isAddressChange =
+      activeUserRegistration &&
+      activeUserRegistration.stellarAddress !== stellarAddress;
 
     const horizonResult = await checkStellarAddress(
       stellarAddress,
@@ -136,6 +146,7 @@ export async function POST(request: NextRequest) {
       },
       update: {
         stellarAddress,
+        deletedAt: null,
         funded: horizonResult.funded,
         trustlineReady: horizonResult.trustline,
         trustlineAuthorized: horizonResult.trustline_authorized,
@@ -146,12 +157,16 @@ export async function POST(request: NextRequest) {
     });
 
     // Record address history
-    if (!existing) {
+    if (!activeUserRegistration) {
       // First registration — record initial address
       await recordInitialAddress(session.user.id, stellarAddress);
     } else if (isAddressChange) {
       // Address changed — record the change
-      await recordAddressChange(session.user.id, existing.stellarAddress, stellarAddress);
+      await recordAddressChange(
+        session.user.id,
+        activeUserRegistration.stellarAddress,
+        stellarAddress
+      );
     }
 
     // Mirror registration to Soroban contract (best-effort, non-blocking).
@@ -169,7 +184,9 @@ export async function POST(request: NextRequest) {
     });
 
     await recordAuditLog({
-      action: existing ? "registration.update" : "registration.create",
+      action: activeUserRegistration
+        ? "registration.update"
+        : "registration.create",
       actorId: session.user.id,
       actorLogin: session.user.githubUsername ?? null,
       targetId: registration.id,
@@ -247,7 +264,7 @@ export async function GET() {
     where: { userId: session.user.id },
   });
 
-  if (!registration) {
+  if (!registration || registration.deletedAt) {
     return NextResponse.json({ registration: null });
   }
 

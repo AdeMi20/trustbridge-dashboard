@@ -39,7 +39,7 @@ export async function GET(request: NextRequest) {
 
   const [{ contributors, nextCursor, hasMore }, total] = await Promise.all([
     getContributorsPaginated(cursor, limit),
-    prisma.registration.count(),
+    prisma.registration.count({ where: { deletedAt: null } }),
   ]);
 
   return NextResponse.json({

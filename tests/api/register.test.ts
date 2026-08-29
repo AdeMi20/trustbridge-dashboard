@@ -14,6 +14,7 @@ vi.mock("@/lib/prisma", () => ({
   prisma: {
     registration: {
       findUnique: vi.fn(),
+      findFirst: vi.fn(),
       upsert: vi.fn(),
     },
   },

@@ -14,7 +14,7 @@ export async function recordInitialAddress(
     where: { userId },
   });
 
-  if (!registration) return;
+  if (!registration || registration.deletedAt) return;
 
   await prisma.addressHistoryRecord.create({
     data: {

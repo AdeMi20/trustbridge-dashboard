@@ -85,6 +85,7 @@ export async function GET(): Promise<NextResponse<HealthResponse>> {
   if (dbStatus !== "error") {
     try {
       const registrations = await prisma.registration.findMany({
+        where: { deletedAt: null },
         include: { user: { select: { githubUsername: true } } },
         orderBy: { updatedAt: "desc" },
       });

@@ -38,6 +38,7 @@ export async function GET() {
   }
 
   const registrations = await prisma.registration.findMany({
+    where: { deletedAt: null },
     include: {
       user: {
         select: {
@@ -122,6 +123,7 @@ export async function POST(request: NextRequest) {
   }
 
   const registrations = await prisma.registration.findMany({
+    where: { deletedAt: null },
     include: {
       user: {
         select: {

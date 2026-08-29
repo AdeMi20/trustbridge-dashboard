@@ -52,6 +52,7 @@ export async function registerStellarAddress(
     create: {
       userId: session.user.id,
       stellarAddress: trimmed,
+      deletedAt: null,
       funded: checkResult.funded,
       trustlineReady: checkResult.trustline,
       trustlineAuthorized: checkResult.trustline_authorized,
@@ -63,6 +64,7 @@ export async function registerStellarAddress(
     },
     update: {
       stellarAddress: trimmed,
+      deletedAt: null,
       funded: checkResult.funded,
       trustlineReady: checkResult.trustline,
       trustlineAuthorized: checkResult.trustline_authorized,
@@ -96,7 +98,9 @@ export async function getCurrentUserRegistration(): Promise<ContributorRow | nul
     },
   });
 
-  return registration ? toContributorRow(registration) : null;
+  return registration && !registration.deletedAt
+    ? toContributorRow(registration)
+    : null;
 }
 
 /**

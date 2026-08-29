@@ -87,6 +87,7 @@ export async function POST(request: NextRequest) {
     // Query registrations that share the same prefix
     const registrations = await prisma.registration.findMany({
       where: {
+        deletedAt: null,
         stellarAddress: {
           startsWith: prefix,
         },

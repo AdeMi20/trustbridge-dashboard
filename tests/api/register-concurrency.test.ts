@@ -53,6 +53,7 @@ vi.mock("@/lib/prisma", () => ({
   prisma: {
     registration: {
       findUnique: vi.fn(),
+      findFirst: vi.fn(),
       upsert: vi.fn(),
     },
   },
@@ -178,6 +179,7 @@ describe("concurrency: idempotency — same user + address, N simultaneous reque
     const CONCURRENCY = 5;
 
     vi.mocked(getServerSession).mockResolvedValue(session(userId) as any);
+    vi.mocked(prisma.registration.findFirst).mockResolvedValue(null);
     vi.mocked(prisma.registration.findUnique).mockResolvedValue(null);
     vi.mocked(checkStellarAddress).mockResolvedValue(horizonOk());
     vi.mocked(prisma.registration.upsert).mockResolvedValue(
@@ -200,6 +202,7 @@ describe("concurrency: idempotency — same user + address, N simultaneous reque
     const userId = "user-payload-check";
 
     vi.mocked(getServerSession).mockResolvedValue(session(userId) as any);
+    vi.mocked(prisma.registration.findFirst).mockResolvedValue(null);
     vi.mocked(prisma.registration.findUnique).mockResolvedValue(null);
     vi.mocked(checkStellarAddress).mockResolvedValue(horizonOk());
     vi.mocked(prisma.registration.upsert).mockResolvedValue(
@@ -228,7 +231,7 @@ describe("concurrency: address conflict race — two users, one address", () => 
   it("when findUnique returns null for user-1 but the address is owned by user-2, returns 409", async () => {
     // Simulate: user-2 already owns the address in DB
     vi.mocked(getServerSession).mockResolvedValue(session("user-1") as any);
-    vi.mocked(prisma.registration.findUnique).mockResolvedValue(
+    vi.mocked(prisma.registration.findFirst).mockResolvedValue(
       regRow("user-2", VALID_ADDRESS_A) as any
     );
 
@@ -250,7 +253,7 @@ describe("concurrency: address conflict race — two users, one address", () => 
       .mockResolvedValueOnce(session("user-racer-1") as any)
       .mockResolvedValueOnce(session("user-racer-2") as any);
 
-    vi.mocked(prisma.registration.findUnique)
+    vi.mocked(prisma.registration.findFirst)
       .mockResolvedValueOnce(null) // user-racer-1 sees the address as free
       .mockResolvedValueOnce(       // user-racer-2 sees user-racer-1 already claimed it
         regRow("user-racer-1", VALID_ADDRESS_A) as any
@@ -272,7 +275,7 @@ describe("concurrency: address conflict race — two users, one address", () => 
 
   it("409 response contains a descriptive error message", async () => {
     vi.mocked(getServerSession).mockResolvedValue(session("user-late") as any);
-    vi.mocked(prisma.registration.findUnique).mockResolvedValue(
+    vi.mocked(prisma.registration.findFirst).mockResolvedValue(
       regRow("user-early", VALID_ADDRESS_A) as any
     );
 
@@ -295,6 +298,7 @@ describe("concurrency: address re-assignment — user updating their own address
 
     // findUnique returns an existing registration owned by this same user
     vi.mocked(getServerSession).mockResolvedValue(session(userId) as any);
+    vi.mocked(prisma.registration.findFirst).mockResolvedValue(null);
     vi.mocked(prisma.registration.findUnique).mockResolvedValue(
       regRow(userId, VALID_ADDRESS_A) as any  // owned by same user
     );
@@ -475,7 +479,7 @@ describe("concurrency: mixed address pool — 50 pairs, each racing for a unique
         return session(`pair-user-${callNo}`) as any;
       });
 
-    vi.mocked(prisma.registration.findUnique).mockImplementation(async ({ where }) => {
+    vi.mocked(prisma.registration.findFirst).mockImplementation(async ({ where }) => {
       const addr = (where as { stellarAddress?: string }).stellarAddress ?? "";
       const count = addressCallCount.get(addr) ?? 0;
       addressCallCount.set(addr, count + 1);
