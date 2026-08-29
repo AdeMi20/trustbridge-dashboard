@@ -9,6 +9,7 @@ datasource db {
 
 model User {
   id              String        @id @default(cuid())
+  maintainerOrgId String        @default("default")
   githubId        String        @unique
   githubUsername  String        @unique
   name            String?
@@ -28,6 +29,7 @@ model User {
 
 model TokenAuditLog {
   id        String   @id @default(cuid())
+  maintainerOrgId String @default("default")
   userId    String
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   action    String
@@ -41,6 +43,7 @@ model TokenAuditLog {
 
 model Registration {
   id                  String        @id @default(cuid())
+  maintainerOrgId     String        @default("default")
   userId              String        @unique
   user                User          @relation(fields: [userId], references: [id], onDelete: Cascade)
   stellarAddress      String        @unique
@@ -68,6 +71,7 @@ enum DisputeStatus {
 
 model DisputeProof {
   id             String        @id @default(cuid())
+  maintainerOrgId String       @default("default")
   registrationId String        @unique
   registration   Registration  @relation(fields: [registrationId], references: [id])
   reason         String
@@ -82,6 +86,7 @@ model DisputeProof {
 
 model AddressHistoryRecord {
   id              String   @id @default(cuid())
+  maintainerOrgId String   @default("default")
   userId          String
   user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   previousAddress String?
@@ -95,6 +100,7 @@ model AddressHistoryRecord {
 
 model AuditLog {
   id          String   @id @default(cuid())
+  maintainerOrgId String @default("default")
   actorId     String?
   actorLogin  String?
   action      String
@@ -109,6 +115,7 @@ model AuditLog {
 
 model Invite {
   id            String    @id @default(cuid())
+  maintainerOrgId String  @default("default")
   codeHash      String    @unique
   batchLabel    String?
   expiresAt     DateTime?
@@ -125,6 +132,7 @@ model Invite {
 
 model QueueJob {
   id           String   @id @default(cuid())
+  maintainerOrgId String @default("default")
   type         String
   status       String   @default("pending")
   data         Json?
@@ -144,6 +152,7 @@ model QueueJob {
 
 model Account {
   id                String  @id @default(cuid())
+  maintainerOrgId   String  @default("default")
   userId            String
   type              String
   provider          String
@@ -162,6 +171,7 @@ model Account {
 
 model Session {
   id           String   @id @default(cuid())
+  maintainerOrgId String @default("default")
   sessionToken String   @unique
   userId       String
   expires      DateTime
@@ -169,9 +179,10 @@ model Session {
 }
 
 model VerificationToken {
-  identifier String
-  token      String   @unique
-  expires    DateTime
+  maintainerOrgId String   @default("default")
+  identifier      String
+  token           String   @unique
+  expires         DateTime
 
   @@unique([identifier, token])
 }

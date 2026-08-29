@@ -9,6 +9,10 @@ The `docker-compose.yml` file defines a containerized development stack with:
 - **PostgreSQL 16** — Database server for TrustBridge registrations
 - **Adminer** — Web UI for database management and inspection
 
+Compose initializes the `trustbridge_app` runtime role from
+`docker/postgres/init-roles.sql`. The `trustbridge` role remains the local
+admin/migration role and bypasses RLS; do not use it in the application.
+
 ## Prerequisites
 
 - [Docker](https://www.docker.com/products/docker-desktop) (20.10+)
@@ -49,6 +53,12 @@ Set the `DATABASE_URL` in `.env.local`:
 DATABASE_URL="postgresql://trustbridge:trustbridge-dev-password@localhost:5432/trustbridge_dashboard?schema=public"
 ```
 
+For the application, use the restricted role and set the tenant session value:
+
+```bash
+DATABASE_URL="postgresql://trustbridge_app:trustbridge-app-dev-password@localhost:5432/trustbridge_dashboard?schema=public&options=-c%20app.maintainer_org_id%3Ddefault"
+```
+
 ### 4. Initialize the database
 
 From the project root, run:
@@ -79,6 +89,9 @@ Adminer is available at [http://localhost:8080](http://localhost:8080).
 - Username: `trustbridge`
 - Password: `trustbridge-dev-password`
 - Database: `trustbridge_dashboard`
+
+Use the admin/migration login above for Adminer. The runtime login is
+`trustbridge_app` with password `trustbridge-app-dev-password`.
 
 ### Using psql
 

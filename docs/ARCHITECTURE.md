@@ -102,6 +102,17 @@ Non-maintainers hitting `/dashboard` are redirected to `/register?error=maintain
 
 See `prisma/schema.prisma`.
 
+### PostgreSQL tenant isolation
+
+All persisted models include `maintainerOrgId`. The migration
+`20260828000000_add_maintainer_org_rls` enables and forces RLS with a policy
+that compares this column to `current_setting('app.maintainer_org_id', true)`.
+The runtime Prisma role must receive that setting through its connection URL;
+an unset setting returns no rows. `trustbridge_migrator` is a separate
+`BYPASSRLS` role used only by Prisma migrations. See
+[`PRISMA_POOL_TUNING.md`](./PRISMA_POOL_TUNING.md) for role creation, grants,
+and connection examples.
+
 ```
 User
 ├── githubId (unique)

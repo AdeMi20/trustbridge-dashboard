@@ -2,6 +2,51 @@
 
 This guide covers configuring PostgreSQL connection pool settings for optimal performance in the TrustBridge Dashboard, especially during batch operations like CSV/JSON exports and contributor rechecks.
 
+## Tenant isolation and database roles
+
+The `20260828000000_add_maintainer_org_rls` migration enables PostgreSQL row-level
+security on each application table. Every row has a `maintainerOrgId` value, and
+queries are visible only when it matches the connection setting
+`app.maintainer_org_id`. A missing setting matches no rows.
+
+Use two PostgreSQL roles:
+
+| Role | Use | RLS behavior |
+|------|-----|--------------|
+| `trustbridge_app` | Runtime Prisma `DATABASE_URL` | Must set `app.maintainer_org_id`; cannot bypass RLS |
+| `trustbridge_migrator` | `prisma migrate deploy` only | Owns schema changes and has `BYPASSRLS` |
+
+Create the roles as an existing database administrator, then grant the app role
+only the required schema/table privileges. Do not use a superuser or the
+migrator URL at runtime:
+
+```sql
+CREATE ROLE trustbridge_app LOGIN PASSWORD 'replace-me' NOSUPERUSER NOBYPASSRLS;
+CREATE ROLE trustbridge_migrator LOGIN PASSWORD 'replace-me' NOSUPERUSER BYPASSRLS;
+GRANT USAGE ON SCHEMA public TO trustbridge_app;
+GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO trustbridge_app;
+GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO trustbridge_app;
+```
+
+Set the runtime tenant in the connection string. The value must be URL encoded,
+and should normally equal `GITHUB_MAINTAINER_ORG`:
+
+```bash
+DATABASE_URL="postgresql://trustbridge_app:password@host:5432/trustbridge?schema=public&options=-c%20app.maintainer_org_id%3Dmy-org"
+```
+
+Run migrations with the separate migrator URL:
+
+```bash
+DATABASE_URL="postgresql://trustbridge_migrator:password@host:5432/trustbridge" npm run db:deploy
+```
+
+Existing rows are assigned to `default` by the migration. Before enabling a real
+tenant value, backfill `maintainerOrgId` for existing data using the migrator
+role. CI currently runs unit tests without PostgreSQL; SQL/RLS behavior must be
+verified against a PostgreSQL instance using the two roles above, not a
+superuser-only test.
+
 ## Overview
 
 Prisma manages database connections through a connection pool. The pool size, connection timeout, and idle timeout affect performance under load:
