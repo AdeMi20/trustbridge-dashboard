@@ -188,6 +188,7 @@ All docs are cross-linked from this README:
 | `/api/auth/[...nextauth]` | GET/POST | NextAuth.js handlers |
 | `/api/check` | POST | Horizon validation `{ address, asset_code?, asset_issuer? }` | 10 req/min |
 | `/api/register` | GET/POST | Read/save contributor registration (authenticated) | — |
+| `/api/address-history` | GET | Contributor's own `AddressHistoryRecord` timeline, newest first (self only; maintainers may pass `?userId=` for another user) |
 | `/api/contributors` | GET/POST | List contributors / batch re-check (maintainer only). Response includes `registryMode` (`REGISTRY_MODE` env var) | — |
 | `/api/contributors/paginated` | GET | Cursor-paginated contributor list for infinite scroll (maintainer only). Also includes `registryMode` | — |
 | `/api/contributors/[id]` | POST | Re-check a **single** contributor via Horizon (maintainer only) |

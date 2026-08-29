@@ -6,6 +6,7 @@ import { useSearchParams } from "next/navigation";
 import { useState } from "react";
 import { CheckCircle2, Loader2 } from "lucide-react";
 
+import { AddressHistoryPanel } from "@/components/AddressHistoryPanel";
 import { AddressInput } from "@/components/AddressInput";
 import { AddressQr } from "@/components/AddressQr";
 import { FreighterProofCard } from "@/components/FreighterProofCard";
@@ -309,6 +310,10 @@ export function RegisterClient() {
           <FreighterProofCard proof={proof} addressReady={Boolean(proofAddress)} />
           <TrustlineGuidancePanel />
         </div>
+      </div>
+
+      <div className="mt-8">
+        <AddressHistoryPanel />
       </div>
 
       <div className="mt-12 border-t pt-8">
