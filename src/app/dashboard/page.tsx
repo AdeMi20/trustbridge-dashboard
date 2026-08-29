@@ -7,6 +7,7 @@ import {
   ContributorTable,
   exportContributorsCsv,
 } from "@/components/ContributorTable";
+import { ContributorPager } from "@/components/ContributorPager";
 import { NetworkStatusPanel } from "@/components/NetworkStatusPanel";
 import { DisputePanel } from "@/components/DisputePanel";
 import { SorobanEventTimeline } from "@/components/SorobanEventTimeline";
@@ -26,6 +27,7 @@ import {
   flattenContributorPages,
   useInfiniteContributors,
 } from "@/lib/use-infinite-contributors";
+import { usePaginatedContributors } from "@/lib/use-paginated-contributors";
 import { useJobProgress } from "@/lib/use-job-progress";
 import type {
   ContributorRow,
@@ -43,6 +45,11 @@ export default function DashboardPage() {
   const queryClient = useQueryClient();
   const contributorsQuery = useInfiniteContributors();
   const { event, isStreaming, startProgress } = useJobProgress();
+
+  // Cursor pager — provides an accessible prev/next alternative to infinite scroll.
+  // The infinite-scroll data is still used by WaveReadinessBar, WavePrepWorkspace,
+  // and DisputePanel which all need the full contributor list.
+  const pager = usePaginatedContributors(25);
 
   const recheckMutation = useMutation({
     mutationFn: async () => {
@@ -258,30 +265,42 @@ export default function DashboardPage() {
         </div>
       )}
 
-      {contributorsQuery.isLoading ? (
+      {pager.isLoading ? (
         <div className="flex items-center justify-center py-20 text-muted-foreground">
           <Loader2 className="mr-2 h-5 w-5 animate-spin" />
           Loading contributors...
         </div>
-      ) : contributorsQuery.isError ? (
+      ) : pager.isError ? (
         <p className="text-destructive">Failed to load contributor data.</p>
       ) : (
-        <ContributorTable
-          contributors={contributors}
-          // `force`: ContributorTable has already shown the accessible export
-          // confirmation, staleness warning included. Leaving this unforced
-          // stacks a second, native `window.confirm()` on top of it.
-          onExport={() => exportContributorsCsv(contributors, true)}
-          onRecheck={(id) => recheckOneMutation.mutate(id)}
-          onLoadMore={() => void contributorsQuery.fetchNextPage()}
-          hasMore={Boolean(contributorsQuery.hasNextPage)}
-          isLoadingMore={contributorsQuery.isFetchingNextPage}
-          recheckingId={
-            recheckOneMutation.isPending
-              ? (recheckOneMutation.variables ?? null)
-              : null
-          }
-        />
+        <>
+          <ContributorTable
+            contributors={pager.contributors}
+            // `force`: ContributorTable has already shown the accessible export
+            // confirmation, staleness warning included. Leaving this unforced
+            // stacks a second, native `window.confirm()` on top of it.
+            onExport={() => exportContributorsCsv(pager.contributors, true)}
+            onRecheck={(id) => recheckOneMutation.mutate(id)}
+            onLoadMore={() => void contributorsQuery.fetchNextPage()}
+            hasMore={Boolean(contributorsQuery.hasNextPage)}
+            isLoadingMore={contributorsQuery.isFetchingNextPage}
+            recheckingId={
+              recheckOneMutation.isPending
+                ? (recheckOneMutation.variables ?? null)
+                : null
+            }
+          />
+          <ContributorPager
+            pageIndex={pager.pageIndex}
+            total={pager.total}
+            pageSize={pager.contributors.length || 25}
+            hasMore={pager.hasMore}
+            hasPrev={pager.hasPrev}
+            isLoading={pager.isLoading}
+            onNext={pager.goToNext}
+            onPrev={pager.goToPrev}
+          />
+        </>
       )}
 
       <DisputePanel contributors={contributors} />

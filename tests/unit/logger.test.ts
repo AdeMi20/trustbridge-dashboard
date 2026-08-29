@@ -77,6 +77,76 @@ describe("StructuredLogger", () => {
       process.env.DEBUG = originalDebug;
     }
   });
+
+  // ── request ID support ─────────────────────────────────────────────────
+
+  it("omits requestId field when none is provided", () => {
+    const logger = new StructuredLogger("test-context");
+    logger.info("no-id message");
+
+    const parsed = JSON.parse(consoleSpy.mock.calls[0][0]);
+    expect(parsed.requestId).toBeUndefined();
+  });
+
+  it("includes requestId when passed to constructor", () => {
+    const reqId = "550e8400-e29b-4d4f-a716-446655440000";
+    const logger = new StructuredLogger("test-context", reqId);
+    logger.info("with-id message");
+
+    const parsed = JSON.parse(consoleSpy.mock.calls[0][0]);
+    expect(parsed.requestId).toBe(reqId);
+  });
+
+  it("includes requestId on every log level emitted by the same logger", () => {
+    const reqId = "550e8400-e29b-4d4f-a716-446655440001";
+    const logger = new StructuredLogger("test-context", reqId);
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+
+    logger.info("info");
+    logger.warn("warn");
+    logger.error("error");
+
+    const infoLog = JSON.parse(consoleSpy.mock.calls[0][0]);
+    const warnLog = JSON.parse(warnSpy.mock.calls[0][0]);
+    const errorLog = JSON.parse(errorSpy.mock.calls[0][0]);
+
+    expect(infoLog.requestId).toBe(reqId);
+    expect(warnLog.requestId).toBe(reqId);
+    expect(errorLog.requestId).toBe(reqId);
+
+    errorSpy.mockRestore();
+    warnSpy.mockRestore();
+  });
+
+  it("withRequestId() returns a new logger that includes the ID", () => {
+    const reqId = "550e8400-e29b-4d4f-a716-446655440002";
+    const base = new StructuredLogger("test-context");
+    const scoped = base.withRequestId(reqId);
+
+    // Original logger should not be affected
+    base.info("base message");
+    const baseParsed = JSON.parse(consoleSpy.mock.calls[0][0]);
+    expect(baseParsed.requestId).toBeUndefined();
+
+    consoleSpy.mockClear();
+
+    // Scoped logger should include the ID
+    scoped.info("scoped message");
+    const scopedParsed = JSON.parse(consoleSpy.mock.calls[0][0]);
+    expect(scopedParsed.requestId).toBe(reqId);
+  });
+
+  it("withRequestId() preserves the context of the original logger", () => {
+    const reqId = "550e8400-e29b-4d4f-a716-446655440003";
+    const base = new StructuredLogger("my-context");
+    const scoped = base.withRequestId(reqId);
+
+    scoped.info("check context");
+    const parsed = JSON.parse(consoleSpy.mock.calls[0][0]);
+    expect(parsed.context).toBe("my-context");
+    expect(parsed.requestId).toBe(reqId);
+  });
 });
 
 describe("createRequestLogger", () => {

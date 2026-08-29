@@ -5,18 +5,33 @@ export interface StructuredLog {
   level: "info" | "warn" | "error" | "debug";
   context: string;
   message: string;
+  requestId?: string;
   details?: Record<string, unknown>;
 }
 
 /**
  * Structured logging utility for request/response tracking and debugging.
  * Logs are emitted to stdout in JSON format for aggregation and analysis.
+ *
+ * Pass a `requestId` to the constructor (or via `withRequestId()`) to include
+ * the ID in every log entry emitted by that instance — making it trivial to
+ * grep all entries belonging to a single HTTP request.
  */
 export class StructuredLogger {
   private context: string;
+  private requestId?: string;
 
-  constructor(context: string) {
+  constructor(context: string, requestId?: string) {
     this.context = context;
+    this.requestId = requestId;
+  }
+
+  /**
+   * Return a new logger that is identical to this one but carries the given
+   * request ID. Useful when you need to hand off a scoped logger to a helper.
+   */
+  withRequestId(requestId: string): StructuredLogger {
+    return new StructuredLogger(this.context, requestId);
   }
 
   private formatLog(
@@ -24,13 +39,19 @@ export class StructuredLogger {
     message: string,
     details?: Record<string, unknown>
   ): StructuredLog {
-    return {
+    const entry: StructuredLog = {
       timestamp: new Date().toISOString(),
       level,
       context: this.context,
       message,
-      details,
     };
+    if (this.requestId) {
+      entry.requestId = this.requestId;
+    }
+    if (details !== undefined) {
+      entry.details = details;
+    }
+    return entry;
   }
 
   info(message: string, details?: Record<string, unknown>) {
