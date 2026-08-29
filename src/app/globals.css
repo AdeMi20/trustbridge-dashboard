@@ -77,3 +77,27 @@
     text-wrap: balance;
   }
 }
+
+/*
+ * Respect prefers-reduced-motion sitewide (issue #141). Collapses
+ * animation/transition durations to effectively zero so motion-sensitive
+ * users don't get sweeping transitions (e.g. WaveReadinessBar's fill bar).
+ * `.animate-spin` is explicitly exempted below — Loader2 spinners communicate
+ * genuine async/loading state, not decorative motion, and freezing them would
+ * make the UI look stuck rather than accessible.
+ */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+
+  .animate-spin {
+    animation-duration: 1s !important;
+    animation-iteration-count: infinite !important;
+  }
+}
